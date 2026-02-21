@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #0a0c0f;
+  --color-surface: #111318;
+  --color-panel: #161a22;
+  --color-border: #1e2533;
+  --color-accent: #f5a623;
+  --color-green: #22c55e;
+  --color-red: #ef4444;
+  --color-text: #e2e8f0;
+  --color-muted: #64748b;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+}
+
+/* * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+} */
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@keyframes pulse-record {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-pulse-record {
+  animation: pulse-record 1s ease-in-out infinite;
+}
