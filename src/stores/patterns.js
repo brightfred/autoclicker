@@ -23,6 +23,8 @@ export const usePatternsStore = defineStore('patterns', () => {
       events: pattern.events,
       totalDuration: pattern.totalDuration,
       clickCount: pattern.events.length,
+      spellCount: pattern.spellCount ?? Math.ceil(pattern.events.length / 2),
+      itemCount:  pattern.itemCount  ?? Math.floor(pattern.events.length / 2),
       avgInterval: pattern.avgInterval,
       stdDevInterval: pattern.stdDevInterval,
       minInterval: pattern.minInterval,

@@ -25,6 +25,8 @@
           <span class="card-name">{{ pattern.name }}</span>
           <div class="card-meta">
             <span class="card-stat">{{ pattern.clickCount }} clicks</span>
+            <span class="card-stat pool-spell">⚡ {{ pattern.spellCount ?? Math.ceil(pattern.clickCount / 2) }} spell</span>
+            <span class="card-stat pool-item">◈ {{ pattern.itemCount ?? Math.floor(pattern.clickCount / 2) }} item</span>
             <span class="card-stat">{{ formatDuration(pattern.totalDuration) }}</span>
             <span class="card-stat">avg {{ pattern.avgInterval }}ms</span>
             <span class="card-stat">±{{ pattern.stdDevInterval }}ms</span>
@@ -56,10 +58,11 @@
 
 <script setup>
 import { ref } from 'vue';
+import { storeToRefs } from 'pinia';
 import { usePatternsStore } from '../stores/patterns';
 
 const store = usePatternsStore();
-const patterns = store.patterns;
+const { patterns } = storeToRefs(store);
 const deleteTarget = ref(null);
 
 function confirmDelete(pattern) { deleteTarget.value = pattern; }
@@ -81,28 +84,28 @@ function exportPattern(pattern) {
 
   lines.push(`PATTERN: ${pattern.name}`);
   lines.push(`RECORDED: ${new Date(pattern.createdAt).toLocaleString()}`);
-  lines.push(`CLICKS: ${pattern.clickCount}`);
+  lines.push(`CLICKS: ${pattern.clickCount}  (⚡ ${pattern.spellCount ?? '?'} spell  ◈ ${pattern.itemCount ?? '?'} item)`);
   lines.push(`DURATION: ${formatDuration(pattern.totalDuration)}`);
   lines.push(`AVG INTERVAL: ${pattern.avgInterval}ms`);
   lines.push(`STD DEV: ${pattern.stdDevInterval}ms`);
   lines.push(`MIN: ${pattern.minInterval}ms  MAX: ${pattern.maxInterval}ms`);
   lines.push('');
-  lines.push('─'.repeat(60));
-  lines.push('  #   |    X    |    Y    |  DELTA   |  ELAPSED ');
-  lines.push('─'.repeat(60));
+  lines.push('─'.repeat(70));
+  lines.push('  #   | TYPE  |    X    |    Y    |  DELTA   |  ELAPSED ');
+  lines.push('─'.repeat(70));
 
   pattern.events.forEach((ev, i) => {
-    const num = String(i + 1).padStart(4);
-    const x = String(ev.x).padStart(7);
-    const y = String(ev.y).padStart(7);
-    const delta = i === 0 ? '       —' : `${String(ev.delta).padStart(6)}ms`;
+    const num  = String(i + 1).padStart(4);
+    const type = (ev.type ?? (i % 2 === 0 ? 'spell' : 'item')).padEnd(5);
+    const x    = String(ev.x).padStart(7);
+    const y    = String(ev.y).padStart(7);
+    const delta   = i === 0 ? '       —' : `${String(ev.delta).padStart(6)}ms`;
     const elapsed = `${(ev.elapsed / 1000).toFixed(3)}s`;
-    lines.push(`${num}  | ${x} | ${y} | ${delta} | ${elapsed}`);
+    lines.push(`${num}  | ${type} | ${x} | ${y} | ${delta} | ${elapsed}`);
   });
 
-  lines.push('─'.repeat(60));
+  lines.push('─'.repeat(70));
 
-  // Interval analysis
   const deltas = pattern.events.map(e => e.delta).slice(1);
   const buckets = { '<500': 0, '500-800': 0, '800-1200': 0, '1200-1800': 0, '>1800': 0 };
   deltas.forEach(d => {
@@ -220,6 +223,7 @@ function exportPattern(pattern) {
 .card-meta {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .card-stat {
@@ -230,6 +234,9 @@ function exportPattern(pattern) {
   border: 1px solid var(--color-border);
   padding: 2px 6px;
 }
+
+.pool-spell { color: #a78bfa; border-color: #4c1d95; }
+.pool-item  { color: #34d399; border-color: #064e3b; }
 
 .card-actions {
   display: flex;

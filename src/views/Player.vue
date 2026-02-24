@@ -19,9 +19,9 @@
         <section class="config-section">
           <h2 class="section-title">Repetitions</h2>
           <div class="reps-row">
-            <button @click="reps = Math.max(1, reps - 1)" :disabled="playing" class="btn-counter">−</button>
+            <button @click="reps = Math.max(1, reps - 1)" :disabled="playing || countdown > 0" class="btn-counter">−</button>
             <span class="reps-value">{{ reps }}</span>
-            <button @click="reps++" :disabled="playing" class="btn-counter">+</button>
+            <button @click="reps++" :disabled="playing || countdown > 0" class="btn-counter">+</button>
           </div>
           <p class="config-label">{{ reps * (pattern?.clickCount || 0) }} total clicks</p>
         </section>
@@ -31,7 +31,7 @@
           <h2 class="section-title">Timing Variance</h2>
           <div class="slider-row">
             <label class="config-label">Factor: {{ varianceFactor.toFixed(1) }}x</label>
-            <input type="range" v-model.number="varianceFactor" min="0.5" max="2.0" step="0.1" :disabled="playing" class="slider" />
+            <input type="range" v-model.number="varianceFactor" min="0.5" max="2.0" step="0.1" :disabled="playing || countdown > 0" class="slider" />
           </div>
           <p class="config-label hint">1.0 = your natural timing. Higher = more variation.</p>
         </section>
@@ -41,15 +41,15 @@
           <h2 class="section-title">AFK Pauses</h2>
           <div class="slider-row">
             <label class="config-label">Chance: {{ Math.round(afkChance * 100) }}% per cast</label>
-            <input type="range" v-model.number="afkChance" min="0" max="0.1" step="0.005" :disabled="playing" class="slider" />
+            <input type="range" v-model.number="afkChance" min="0" max="0.1" step="0.005" :disabled="playing || countdown > 0" class="slider" />
           </div>
           <div class="slider-row">
             <label class="config-label">Min: {{ afkMinSec }}s</label>
-            <input type="range" v-model.number="afkMinSec" min="1" max="30" :disabled="playing" class="slider" />
+            <input type="range" v-model.number="afkMinSec" min="1" max="30" :disabled="playing || countdown > 0" class="slider" />
           </div>
           <div class="slider-row">
             <label class="config-label">Max: {{ afkMaxSec }}s</label>
-            <input type="range" v-model.number="afkMaxSec" min="1" max="60" :disabled="playing" class="slider" />
+            <input type="range" v-model.number="afkMaxSec" min="1" max="60" :disabled="playing || countdown > 0" class="slider" />
           </div>
         </section>
 
@@ -57,6 +57,7 @@
         <section class="config-section">
           <h2 class="section-title">Hotkey</h2>
           <p class="config-label">F6 — toggle start / stop</p>
+          <p class="config-label hint mt-2">F6 during countdown cancels it.</p>
         </section>
 
       </div>
@@ -67,8 +68,8 @@
         <div class="dash-stats">
           <div class="stat-card">
             <span class="stat-label">Status</span>
-            <span class="stat-value" :class="afkActive ? 'text-yellow' : playing ? 'text-green' : 'text-muted'">
-              {{ afkActive ? 'AFK' : playing ? 'RUNNING' : 'IDLE' }}
+            <span class="stat-value" :class="countdown > 0 ? 'text-yellow' : afkActive ? 'text-yellow' : playing ? 'text-green' : 'text-muted'">
+              {{ countdown > 0 ? 'STARTING' : afkActive ? 'AFK' : playing ? 'RUNNING' : 'IDLE' }}
             </span>
           </div>
           <div class="stat-card">
@@ -86,8 +87,15 @@
         </div>
         <p class="progress-label">{{ totalCasts }} / {{ reps * (pattern?.clickCount || 0) }}</p>
 
-        <div class="dash-controls">
-          <button v-if="!playing" @click="startPlayback" class="btn-play">
+        <!-- Countdown display -->
+        <div v-if="countdown > 0" class="countdown-ring">
+          <span class="countdown-number">{{ countdown }}</span>
+          <span class="countdown-label">position your mouse, starting in...</span>
+        </div>
+
+        <!-- Normal controls -->
+        <div v-else class="dash-controls">
+          <button v-if="!playing" @click="beginCountdown" class="btn-play">
             ▶ Start (F6)
           </button>
           <button v-else @click="stopPlayback" class="btn-stop-play">
@@ -125,6 +133,9 @@ const playing = ref(false);
 const currentRep = ref(0);
 const totalCasts = ref(0);
 const afkActive = ref(false);
+const countdown = ref(0);
+
+let countdownTimer = null;
 
 const progressPct = computed(() => {
   const total = reps.value * (pattern.value?.clickCount || 0);
@@ -150,17 +161,39 @@ function buildConfig() {
   };
 }
 
-import { toRaw } from 'vue'
+function beginCountdown() {
+  if (playing.value || countdown.value > 0) return;
+  countdown.value = 5;
+  countdownTimer = setInterval(() => {
+    countdown.value--;
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      startPlayback();
+    }
+  }, 1000);
+}
+
+function cancelCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  countdown.value = 0;
+}
 
 async function startPlayback() {
-  if (!pattern.value) return
-  totalCasts.value = 0
-  currentRep.value = 0
-  playing.value = true
-  await window.electronAPI.registerHotkey()
-  window.electronAPI.startPlayback(toRaw(pattern.value), buildConfig())
+  if (!pattern.value) return;
+  totalCasts.value = 0;
+  currentRep.value = 0;
+  playing.value = true;
+  const rawPattern = JSON.parse(JSON.stringify(pattern.value));
+  await window.electronAPI.registerHotkey('F6');
+  window.electronAPI.startPlayback(rawPattern, buildConfig());
 }
+
 async function stopPlayback() {
+  cancelCountdown();
   await window.electronAPI.stopPlayback();
   await window.electronAPI.unregisterHotkey();
   playing.value = false;
@@ -170,8 +203,8 @@ onMounted(() => {
   window.electronAPI.onPlaybackStatus((status) => {
     playing.value = status.playing;
     if (status.cast !== undefined) totalCasts.value = status.cast;
-    if (status.rep !== undefined) currentRep.value = status.rep;
-    if (status.afk !== undefined) afkActive.value = status.afk;
+    if (status.rep  !== undefined) currentRep.value  = status.rep;
+    if (status.afk  !== undefined) afkActive.value   = status.afk;
     if (status.done) {
       playing.value = false;
       window.electronAPI.unregisterHotkey();
@@ -179,13 +212,18 @@ onMounted(() => {
   });
 
   window.electronAPI.onHotkeyPlay(async () => {
-    if (!playing.value) await startPlayback();
+    if (countdown.value > 0) {
+      cancelCountdown(); // F6 during countdown cancels it
+    } else if (!playing.value) {
+      beginCountdown();
+    }
   });
 });
 
 onUnmounted(() => {
   window.electronAPI.offPlaybackStatus();
   window.electronAPI.offHotkeyPlay();
+  cancelCountdown();
   if (playing.value) window.electronAPI.stopPlayback();
   window.electronAPI.unregisterHotkey();
 });
@@ -280,6 +318,8 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
+.mt-2 { margin-top: 8px; }
+
 .slider-row {
   display: flex;
   flex-direction: column;
@@ -364,10 +404,10 @@ onUnmounted(() => {
   color: var(--color-text);
 }
 
-.text-green { color: var(--color-green); }
+.text-green  { color: var(--color-green); }
 .text-yellow { color: var(--color-accent); }
-.text-muted { color: var(--color-muted); }
-.font-mono { font-family: var(--font-mono); }
+.text-muted  { color: var(--color-muted); }
+.font-mono   { font-family: var(--font-mono); }
 
 .progress-bar-wrap {
   width: 100%;
@@ -386,6 +426,29 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-muted);
+}
+
+.countdown-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.countdown-number {
+  font-family: var(--font-mono);
+  font-size: 72px;
+  color: var(--color-accent);
+  line-height: 1;
+  animation: pulse-record 1s ease-in-out infinite;
+}
+
+.countdown-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .dash-controls { display: flex; gap: 12px; }

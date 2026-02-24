@@ -39,44 +39,48 @@ const createWindow = () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function gaussianRandom(mean, std) {
-  const u1 = Math.random();
-  const u2 = Math.random();
-  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return mean + z * std;
-}
-
-function clamp(val, min, max) {
-  return Math.max(min, Math.min(max, val));
-}
-
-async function moveMouse(robot, fromX, fromY, toX, toY, durationMs) {
-  const steps = Math.max(8, Math.round(durationMs / 10));
-  const cp1x = fromX + (toX - fromX) * 0.3 + (Math.random() - 0.5) * 20;
-  const cp1y = fromY + (toY - fromY) * 0.1 + (Math.random() - 0.5) * 20;
-  const cp2x = fromX + (toX - fromX) * 0.7 + (Math.random() - 0.5) * 20;
-  const cp2y = fromY + (toY - fromY) * 0.9 + (Math.random() - 0.5) * 20;
-
-  for (let i = 1; i <= steps; i++) {
-    if (!playing) break;
-    const t = i / steps;
-    const mt = 1 - t;
-    const x = Math.round(mt * mt * mt * fromX + 3 * mt * mt * t * cp1x + 3 * mt * t * t * cp2x + t * t * t * toX);
-    const y = Math.round(mt * mt * mt * fromY + 3 * mt * mt * t * cp1y + 3 * mt * t * t * cp2y + t * t * t * toY);
-    robot.moveMouse(x, y);
-    await sleep(durationMs / steps);
-  }
-}
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function pickInterval(pattern, varianceFactor) {
-  const base = pattern.avgInterval;
-  const std = Math.max(pattern.stdDevInterval * varianceFactor, 10);
-  const interval = gaussianRandom(base, std);
-  return clamp(interval, pattern.minInterval * 0.8, pattern.maxInterval * 1.2);
+// Weighted pick by distance from current position.
+// 0px = weight 1.0, 1px = weight 0.3, 2px = weight 0.09, 3px+ ≈ 0
+// Mouse mostly stays on same pixel, occasional 1-2px drift like a real hand.
+function weightedProximityPick(pool, currentX, currentY, maxDist = 5) {
+  const candidates = pool.filter(ev =>
+    Math.hypot(ev.x - currentX, ev.y - currentY) <= maxDist
+  );
+
+  // Fall back to full pool if not enough nearby (e.g. very first pick)
+  const source = candidates.length >= 3 ? candidates : pool;
+
+  const weights = source.map(ev => {
+    const dist = Math.hypot(ev.x - currentX, ev.y - currentY);
+    return Math.pow(0.3, dist);
+  });
+
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < source.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return source[i];
+  }
+  return source[source.length - 1];
+}
+
+// Remove outlier events from a pool — anything more than threshold px
+// from the median position is considered a misclick/stray click (e.g. stop button)
+function removeOutliers(events, threshold = 50) {
+  if (events.length < 3) return events;
+
+  const xs = [...events.map(e => e.x)].sort((a, b) => a - b);
+  const ys = [...events.map(e => e.y)].sort((a, b) => a - b);
+  const medX = xs[Math.floor(xs.length / 2)];
+  const medY = ys[Math.floor(ys.length / 2)];
+
+  return events.filter(ev =>
+    Math.hypot(ev.x - medX, ev.y - medY) <= threshold
+  );
 }
 
 // ── Window controls ───────────────────────────────────────────────────────────
@@ -99,7 +103,9 @@ ipcMain.handle('recording-start', async () => {
     const delta = now - lastEventTime;
     lastEventTime = now;
     const elapsed = now - recordingStart;
-    const event = { x: e.x, y: e.y, delta, elapsed, button: e.button };
+    const index = recordingEvents.length;
+    const type = index % 2 === 0 ? 'spell' : 'item';
+    const event = { x: e.x, y: e.y, delta, elapsed, button: e.button, index, type };
     recordingEvents.push(event);
     mainWindow?.webContents.send('recording-event', event);
   });
@@ -114,17 +120,32 @@ ipcMain.handle('recording-stop', async () => {
   uIOhook.removeAllListeners('mousedown');
   uIOhook.stop();
 
-  const events = [...recordingEvents];
+  let events = [...recordingEvents];
+
+  // ── Outlier cleanup ───────────────────────────────────────────────────────
+  // Split by type, remove outliers from each pool separately, then recombine.
+  // Eliminates stop-button clicks, misclicks, stray clicks, etc.
+  const spellEvents = removeOutliers(events.filter(e => e.type === 'spell'), 50);
+  const itemEvents  = removeOutliers(events.filter(e => e.type === 'item'),  50);
+  const spellIds    = new Set(spellEvents.map(e => e.index));
+  const itemIds     = new Set(itemEvents.map(e => e.index));
+  events = events.filter(e => spellIds.has(e.index) || itemIds.has(e.index));
+
   const totalDuration = events.length > 0 ? events[events.length - 1].elapsed : 0;
   const deltas = events.map(e => e.delta).filter((_, i) => i > 0);
   const avg = deltas.length > 0 ? deltas.reduce((a, b) => a + b, 0) / deltas.length : 0;
   const variance = deltas.length > 0
     ? deltas.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / deltas.length : 0;
 
+  const spellCount = events.filter(e => e.type === 'spell').length;
+  const itemCount  = events.filter(e => e.type === 'item').length;
+
   return {
     events,
     totalDuration,
     clickCount: events.length,
+    spellCount,
+    itemCount,
     avgInterval: Math.round(avg),
     stdDevInterval: Math.round(Math.sqrt(variance)),
     minInterval: deltas.length > 0 ? Math.min(...deltas) : 0,
@@ -143,42 +164,102 @@ ipcMain.handle('playback-start', async (_, { pattern, config }) => {
 
   const { reps, afkChance, afkMinMs, afkMaxMs, varianceFactor } = config;
 
-  // Shuffle a copy of events for this run
-  const shuffled = [...pattern.events].sort(() => Math.random() - 0.5);
+  // Split into spell / item pools by recorded parity
+  const spellPool = pattern.events.filter(e => e.type === 'spell');
+  const itemPool  = pattern.events.filter(e => e.type === 'item');
 
-  let currentX = shuffled[0].x;
-  let currentY = shuffled[0].y;
+  if (spellPool.length === 0 || itemPool.length === 0) {
+    console.log(`[PLAYBACK] ERROR — spellPool: ${spellPool.length}, itemPool: ${itemPool.length} — one pool is empty, aborting`);
+    playing = false;
+    mainWindow?.webContents.send('playback-status', { playing: false, done: true });
+    return;
+  }
+
+  // ── Two separate timing pools matching click parity ───────────────────────
+  // Spell→Item (fast): time between clicking spell and clicking item
+  //   = delta values on item events (~200-500ms, just waiting for view switch)
+  // Item→Spell (slow): time between clicking item and clicking spell again
+  //   = delta values on spell events (~2000-3500ms, waiting for alch animation + spellbook)
+  const spellToItemTimings = pattern.events
+    .filter((e, i) => i > 0 && e.type === 'item')
+    .map(e => e.delta)
+    .filter(d => d > 50);
+
+  const itemToSpellTimings = pattern.events
+    .filter((e, i) => i > 0 && e.type === 'spell')
+    .map(e => e.delta)
+    .filter(d => d > 50);
+
+  console.log(`[PLAYBACK] ── Session start ──────────────────────────────`);
+  console.log(`[PLAYBACK] spellPool: ${spellPool.length} events, itemPool: ${itemPool.length} events`);
+  console.log(`[PLAYBACK] spellToItemTimings: ${spellToItemTimings.length} values, range ${Math.min(...spellToItemTimings)}–${Math.max(...spellToItemTimings)}ms`);
+  console.log(`[PLAYBACK] itemToSpellTimings: ${itemToSpellTimings.length} values, range ${Math.min(...itemToSpellTimings)}–${Math.max(...itemToSpellTimings)}ms`);
+  console.log(`[PLAYBACK] reps: ${reps}, cyclesPerRep: ${Math.min(spellPool.length, itemPool.length)}`);
+
+  function pickSpellToItem() {
+    const base = spellToItemTimings[Math.floor(Math.random() * spellToItemTimings.length)];
+    const scale = 1 + (Math.random() - 0.5) * 0.2 * varianceFactor;
+    return Math.max(50, Math.round(base * scale));
+  }
+
+  function pickItemToSpell() {
+    const base = itemToSpellTimings[Math.floor(Math.random() * itemToSpellTimings.length)];
+    const scale = 1 + (Math.random() - 0.5) * 0.2 * varianceFactor;
+    return Math.max(50, Math.round(base * scale));
+  }
+
+  // Start from the first recorded spell position
+  let currentX = spellPool[0].x;
+  let currentY = spellPool[0].y;
+
   let totalCasts = 0;
-  let eventIndex = 0;
+  const cyclesPerRep = Math.min(spellPool.length, itemPool.length);
 
   for (let rep = 0; rep < reps && playing; rep++) {
-    for (let cast = 0; cast < pattern.clickCount && playing; cast++) {
-      const ev = shuffled[eventIndex % shuffled.length];
-      eventIndex++;
+    console.log(`[PLAYBACK] ── Rep ${rep + 1}/${reps} start ─────────────────────`);
 
-      // Re-shuffle when we've used all events
-      if (eventIndex % shuffled.length === 0) {
-        shuffled.sort(() => Math.random() - 0.5);
-      }
+    for (let cast = 0; cast < cyclesPerRep && playing; cast++) {
 
-      // Smooth move to next click position
-      const dist = Math.hypot(ev.x - currentX, ev.y - currentY);
-      const moveDuration = clamp(dist * 1.5, 20, 120);
-      await moveMouse(robot, currentX, currentY, ev.x, ev.y, moveDuration);
-      if (!playing) break;
-
+      // 1. Click alch spell
+      const spellEv = weightedProximityPick(spellPool, currentX, currentY, 5);
+      const spellToItemWait = pickSpellToItem();
+      console.log(`[SPELL] rep:${rep+1} cast:${cast+1} → (${spellEv.x},${spellEv.y}) | waiting ${spellToItemWait}ms for inventory`);
+      robot.moveMouse(spellEv.x, spellEv.y);
       robot.mouseClick();
-      currentX = ev.x;
-      currentY = ev.y;
+      currentX = spellEv.x;
+      currentY = spellEv.y;
       totalCasts++;
 
       mainWindow?.webContents.send('playback-status', {
         playing: true, cast: totalCasts, rep: rep + 1,
       });
 
-      // AFK pause
+      await sleep(spellToItemWait);
+      if (!playing) break;
+
+      // 2. Click item
+      const itemEv = weightedProximityPick(itemPool, currentX, currentY, 5);
+      const itemToSpellWait = pickItemToSpell();
+      console.log(`[ITEM]  rep:${rep+1} cast:${cast+1} → (${itemEv.x},${itemEv.y}) | waiting ${itemToSpellWait}ms for spellbook`);
+      robot.moveMouse(itemEv.x, itemEv.y);
+      robot.mouseClick();
+      currentX = itemEv.x;
+      currentY = itemEv.y;
+      totalCasts++;
+
+      mainWindow?.webContents.send('playback-status', {
+        playing: true, cast: totalCasts, rep: rep + 1,
+      });
+
+      // Wait for alch animation to finish and spellbook to reappear (slow)
+      // This MUST happen before anything else to keep the cycle in sync
+      await sleep(itemToSpellWait);
+      if (!playing) break;
+
+      // AFK pause AFTER the normal cycle completes — additive on top of itemToSpell wait
       if (Math.random() < afkChance) {
         const afkDuration = afkMinMs + Math.random() * (afkMaxMs - afkMinMs);
+        console.log(`[AFK]   rep:${rep+1} cast:${cast+1} → pausing ${Math.round(afkDuration)}ms`);
         mainWindow?.webContents.send('playback-status', {
           playing: true, cast: totalCasts, rep: rep + 1, afk: true,
         });
@@ -188,14 +269,10 @@ ipcMain.handle('playback-start', async (_, { pattern, config }) => {
           playing: true, cast: totalCasts, rep: rep + 1, afk: false,
         });
       }
-
-      if (cast < pattern.clickCount - 1 || rep < reps - 1) {
-        const interval = pickInterval(pattern, varianceFactor);
-        await sleep(interval);
-      }
     }
   }
 
+  console.log(`[PLAYBACK] ── Session end — totalCasts: ${totalCasts} ────────`);
   playing = false;
   mainWindow?.webContents.send('playback-status', {
     playing: false, cast: totalCasts, rep: reps, done: true,
@@ -203,14 +280,15 @@ ipcMain.handle('playback-start', async (_, { pattern, config }) => {
 });
 
 ipcMain.handle('playback-stop', () => {
+  console.log(`[PLAYBACK] Stopped by user`);
   playing = false;
 });
 
 // ── Hotkey ────────────────────────────────────────────────────────────────────
 
-ipcMain.handle('hotkey-register', () => {
+ipcMain.handle('hotkey-register', (_, key = 'F6') => {
   globalShortcut.unregisterAll();
-  globalShortcut.register('F6', () => {
+  globalShortcut.register(key, () => {
     if (playing) {
       playing = false;
       mainWindow?.webContents.send('playback-status', { playing: false, hotkeyStop: true });

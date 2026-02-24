@@ -9,6 +9,10 @@
 
     <!-- State: idle -->
     <div v-if="state === 'idle'" class="rec-body">
+      <div class="legend">
+        <span class="legend-item spell">⚡ Odd clicks (1, 3, 5...) → Alch spell</span>
+        <span class="legend-item item">◈ Even clicks (2, 4, 6...) → Item</span>
+      </div>
       <button @click="startCountdown" class="btn-primary">
         ◉ Start Recording
       </button>
@@ -25,7 +29,11 @@
       <div class="rec-status">
         <span class="rec-dot animate-pulse-record">●</span>
         <span class="rec-time">{{ elapsedFormatted }}</span>
-        <span class="rec-count">{{ events.length }} clicks</span>
+        <span class="rec-count">
+          {{ events.length }} clicks
+          <span class="pool-spell">⚡ {{ spellCount }}</span>
+          <span class="pool-item">◈ {{ itemCount }}</span>
+        </span>
         <button @click="stopRecording" class="btn-stop">■ Stop</button>
       </div>
 
@@ -33,8 +41,14 @@
         <div v-if="events.length === 0" class="log-empty">
           Waiting for clicks...
         </div>
-        <div v-for="(ev, i) in events" :key="i" class="log-row">
+        <div
+          v-for="(ev, i) in events"
+          :key="i"
+          class="log-row"
+          :class="ev.type === 'spell' ? 'row-spell' : 'row-item'"
+        >
           <span class="log-index">#{{ i + 1 }}</span>
+          <span class="log-type">{{ ev.type === 'spell' ? '⚡' : '◈' }}</span>
           <span class="log-pos">{{ ev.x }}, {{ ev.y }}</span>
           <span class="log-delta">+{{ ev.delta }}ms</span>
         </div>
@@ -44,7 +58,12 @@
     <!-- State: saving -->
     <div v-if="state === 'saving'" class="rec-body saving-body">
       <div class="save-card">
-        <p class="save-info">{{ pendingStats?.clickCount }} clicks · {{ durationFormatted(pendingStats?.totalDuration) }}</p>
+        <p class="save-info">
+          {{ pendingStats?.clickCount }} clicks ·
+          <span class="pool-spell">⚡ {{ pendingStats?.spellCount }} spell</span> ·
+          <span class="pool-item">◈ {{ pendingStats?.itemCount }} item</span> ·
+          {{ durationFormatted(pendingStats?.totalDuration) }}
+        </p>
         <input
           v-model="patternName"
           class="name-input"
@@ -83,6 +102,9 @@ const nameInputEl = ref(null);
 
 let elapsedTimer = null;
 let countdownTimer = null;
+
+const spellCount = computed(() => events.value.filter(e => e.type === 'spell').length);
+const itemCount  = computed(() => events.value.filter(e => e.type === 'item').length);
 
 const elapsedFormatted = computed(() => {
   const s = Math.floor(elapsedMs.value / 1000);
@@ -192,6 +214,25 @@ onUnmounted(() => {
   gap: 16px;
 }
 
+.legend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.legend-item.spell { color: #a78bfa; border-color: #4c1d95; }
+.legend-item.item  { color: #34d399; border-color: #064e3b; }
+
 .btn-primary {
   padding: 12px 32px;
   background: var(--color-accent);
@@ -266,9 +307,12 @@ onUnmounted(() => {
   border: 1px solid var(--color-border);
 }
 
-.rec-dot { color: var(--color-red); font-size: 16px; }
-.rec-time { font-family: var(--font-mono); font-size: 16px; color: var(--color-accent); }
-.rec-count { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); flex: 1; }
+.rec-dot   { color: var(--color-red); font-size: 16px; }
+.rec-time  { font-family: var(--font-mono); font-size: 16px; color: var(--color-accent); }
+.rec-count { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); flex: 1; display: flex; gap: 10px; align-items: center; }
+
+.pool-spell { color: #a78bfa; }
+.pool-item  { color: #34d399; }
 
 .event-log {
   flex: 1;
@@ -294,8 +338,13 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--color-border);
 }
 .log-row:last-child { border-bottom: none; }
+
+.row-spell { border-left: 2px solid #4c1d95; }
+.row-item  { border-left: 2px solid #064e3b; }
+
 .log-index { color: var(--color-muted); width: 32px; }
-.log-pos { color: var(--color-text); width: 80px; }
+.log-type  { width: 16px; }
+.log-pos   { color: var(--color-text); width: 80px; }
 .log-delta { color: var(--color-accent); }
 
 .save-card {
