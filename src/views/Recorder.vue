@@ -4,18 +4,39 @@
     <!-- Header -->
     <div class="rec-header">
       <h1 class="rec-title">New Recording</h1>
-      <p class="rec-sub">Click anywhere on screen. Every click will be captured.</p>
+      <p class="rec-sub">Select a model, then click anywhere on screen. Every click will be captured.</p>
     </div>
 
     <!-- State: idle -->
     <div v-if="state === 'idle'" class="rec-body">
-      <div class="legend">
-        <span class="legend-item spell">⚡ Odd clicks (1, 3, 5...) → Alch spell</span>
-        <span class="legend-item item">◈ Even clicks (2, 4, 6...) → Item</span>
+
+      <!-- Model selector -->
+      <div class="model-select-wrap">
+        <label class="model-label">Model</label>
+        <select v-model="selectedModelId" class="model-select">
+          <option v-for="model in allModels" :key="model.id" :value="model.id">
+            {{ model.name }}
+          </option>
+        </select>
+        <p class="model-description">{{ selectedModel?.description }}</p>
       </div>
-      <button @click="startCountdown" class="btn-primary">
+
+      <!-- Legend — driven by selected model -->
+      <div class="legend">
+        <span
+          v-for="(item, i) in selectedModel?.recorderConfig.legend"
+          :key="i"
+          class="legend-item"
+          :class="`legend-type-${i}`"
+        >
+          {{ item.label }}
+        </span>
+      </div>
+
+      <button @click="startCountdown" class="btn-primary" :disabled="!selectedModelId">
         ◉ Start Recording
       </button>
+
     </div>
 
     <!-- State: countdown -->
@@ -28,12 +49,9 @@
     <div v-if="state === 'recording'" class="rec-body recording-body">
       <div class="rec-status">
         <span class="rec-dot animate-pulse-record">●</span>
+        <span class="rec-model">{{ selectedModel?.name }}</span>
         <span class="rec-time">{{ elapsedFormatted }}</span>
-        <span class="rec-count">
-          {{ events.length }} clicks
-          <span class="pool-spell">⚡ {{ spellCount }}</span>
-          <span class="pool-item">◈ {{ itemCount }}</span>
-        </span>
+        <span class="rec-count">{{ events.length }} clicks</span>
         <button @click="stopRecording" class="btn-stop">■ Stop</button>
       </div>
 
@@ -45,10 +63,10 @@
           v-for="(ev, i) in events"
           :key="i"
           class="log-row"
-          :class="ev.type === 'spell' ? 'row-spell' : 'row-item'"
+          :class="`log-type-${ev.type}`"
         >
           <span class="log-index">#{{ i + 1 }}</span>
-          <span class="log-type">{{ ev.type === 'spell' ? '⚡' : '◈' }}</span>
+          <span class="log-type-label">{{ ev.type }}</span>
           <span class="log-pos">{{ ev.x }}, {{ ev.y }}</span>
           <span class="log-delta">+{{ ev.delta }}ms</span>
         </div>
@@ -60,9 +78,8 @@
       <div class="save-card">
         <p class="save-info">
           {{ pendingStats?.clickCount }} clicks ·
-          <span class="pool-spell">⚡ {{ pendingStats?.spellCount }} spell</span> ·
-          <span class="pool-item">◈ {{ pendingStats?.itemCount }} item</span> ·
-          {{ durationFormatted(pendingStats?.totalDuration) }}
+          {{ durationFormatted(pendingStats?.totalDuration) }} ·
+          <span class="save-model">{{ selectedModel?.name }}</span>
         </p>
         <input
           v-model="patternName"
@@ -87,39 +104,44 @@
 import { ref, computed, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePatternsStore } from '../stores/patterns.js';
+import { getAllModels } from '../models/index.js';
 
 const router = useRouter();
-const store = usePatternsStore();
+const store  = usePatternsStore();
 
-const state = ref('idle'); // idle | countdown | recording | saving
-const countdown = ref(3);
-const events = ref([]);
-const elapsedMs = ref(0);
-const pendingStats = ref(null);
-const patternName = ref('');
-const logEl = ref(null);
-const nameInputEl = ref(null);
+// All available models for the dropdown
+const allModels = getAllModels();
 
-let elapsedTimer = null;
+const state           = ref('idle');
+const selectedModelId = ref(allModels[0]?.id ?? null);
+const countdown       = ref(3);
+const events          = ref([]);
+const elapsedMs       = ref(0);
+const pendingStats    = ref(null);
+const patternName     = ref('');
+const logEl           = ref(null);
+const nameInputEl     = ref(null);
+
+let elapsedTimer   = null;
 let countdownTimer = null;
 
-const spellCount = computed(() => events.value.filter(e => e.type === 'spell').length);
-const itemCount  = computed(() => events.value.filter(e => e.type === 'item').length);
+const selectedModel = computed(() =>
+  allModels.find(m => m.id === selectedModelId.value) ?? null
+);
 
 const elapsedFormatted = computed(() => {
-  const s = Math.floor(elapsedMs.value / 1000);
+  const s  = Math.floor(elapsedMs.value / 1000);
   const ms = String(elapsedMs.value % 1000).padStart(3, '0');
   return `${s}.${ms}s`;
 });
 
 function durationFormatted(ms) {
   if (!ms) return '0s';
-  const s = (ms / 1000).toFixed(1);
-  return `${s}s`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function startCountdown() {
-  state.value = 'countdown';
+  state.value    = 'countdown';
   countdown.value = 3;
   countdownTimer = setInterval(() => {
     countdown.value--;
@@ -131,9 +153,9 @@ function startCountdown() {
 }
 
 async function beginRecording() {
-  events.value = [];
+  events.value   = [];
   elapsedMs.value = 0;
-  state.value = 'recording';
+  state.value    = 'recording';
 
   window.electronAPI.onRecordingEvent((ev) => {
     events.value.push(ev);
@@ -144,17 +166,18 @@ async function beginRecording() {
 
   elapsedTimer = setInterval(() => { elapsedMs.value += 100; }, 100);
 
-  await window.electronAPI.startRecording();
+  // Pass modelId to main process so it loads the right model
+  await window.electronAPI.startRecording(selectedModelId.value);
 }
 
 async function stopRecording() {
   clearInterval(elapsedTimer);
   window.electronAPI.offRecordingEvent();
 
-  const stats = await window.electronAPI.stopRecording();
+  const stats    = await window.electronAPI.stopRecording();
   pendingStats.value = stats;
-  patternName.value = '';
-  state.value = 'saving';
+  patternName.value  = '';
+  state.value        = 'saving';
 
   nextTick(() => nameInputEl.value?.focus());
 }
@@ -170,7 +193,7 @@ function savePattern() {
 
 function discardPattern() {
   pendingStats.value = null;
-  state.value = 'idle';
+  state.value        = 'idle';
 }
 
 onUnmounted(() => {
@@ -214,6 +237,53 @@ onUnmounted(() => {
   gap: 16px;
 }
 
+/* ── Model selector ── */
+.model-select-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.model-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.model-select {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 8px 32px 8px 14px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  min-width: 220px;
+  transition: border-color 0.15s;
+}
+.model-select:focus { border-color: var(--color-accent); }
+
+.model-description {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  text-align: center;
+  max-width: 320px;
+}
+
+/* ── Legend ── */
 .legend {
   display: flex;
   flex-direction: column;
@@ -228,11 +298,15 @@ onUnmounted(() => {
   padding: 4px 12px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  color: var(--color-muted);
 }
 
-.legend-item.spell { color: #a78bfa; border-color: #4c1d95; }
-.legend-item.item  { color: #34d399; border-color: #064e3b; }
+/* First legend entry — accent purple */
+.legend-type-0 { color: #a78bfa; border-color: #4c1d95; }
+/* Second legend entry — accent green */
+.legend-type-1 { color: #34d399; border-color: #064e3b; }
 
+/* ── Buttons ── */
 .btn-primary {
   padding: 12px 32px;
   background: var(--color-accent);
@@ -246,7 +320,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: opacity 0.15s;
 }
-.btn-primary:hover { opacity: 0.85; }
+.btn-primary:hover:not(:disabled) { opacity: 0.85; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn-stop {
@@ -279,6 +353,7 @@ onUnmounted(() => {
 }
 .btn-ghost:hover { color: var(--color-text); border-color: var(--color-muted); }
 
+/* ── Countdown ── */
 .countdown-number {
   font-family: var(--font-mono);
   font-size: 96px;
@@ -292,6 +367,7 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
+/* ── Recording state ── */
 .recording-body {
   align-items: stretch;
   justify-content: flex-start;
@@ -308,11 +384,9 @@ onUnmounted(() => {
 }
 
 .rec-dot   { color: var(--color-red); font-size: 16px; }
-.rec-time  { font-family: var(--font-mono); font-size: 16px; color: var(--color-accent); }
-.rec-count { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); flex: 1; display: flex; gap: 10px; align-items: center; }
-
-.pool-spell { color: #a78bfa; }
-.pool-item  { color: #34d399; }
+.rec-model { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--color-accent); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-time  { font-family: var(--font-mono); font-size: 16px; color: var(--color-text); }
+.rec-count { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); flex: 1; }
 
 .event-log {
   flex: 1;
@@ -336,16 +410,22 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 12px;
   border-bottom: 1px solid var(--color-border);
+  border-left: 2px solid var(--color-border);
 }
 .log-row:last-child { border-bottom: none; }
 
-.row-spell { border-left: 2px solid #4c1d95; }
-.row-item  { border-left: 2px solid #064e3b; }
+/* Dynamic type colors — first type purple, second green, fallback muted */
+.log-type-spell, .log-type-slotA { border-left-color: #4c1d95; }
+.log-type-item,  .log-type-slotB { border-left-color: #064e3b; }
+.log-type-click                  { border-left-color: var(--color-accent); }
 
-.log-index { color: var(--color-muted); width: 32px; }
-.log-type  { width: 16px; }
-.log-pos   { color: var(--color-text); width: 80px; }
-.log-delta { color: var(--color-accent); }
+.log-index      { color: var(--color-muted); width: 32px; }
+.log-type-label { width: 56px; color: var(--color-muted); }
+.log-pos        { color: var(--color-text); width: 80px; }
+.log-delta      { color: var(--color-accent); }
+
+/* ── Saving state ── */
+.saving-body { justify-content: center; }
 
 .save-card {
   background: var(--color-surface);
@@ -365,6 +445,11 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.save-model {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
 .name-input {
   background: var(--color-panel);
   border: 1px solid var(--color-border);
@@ -377,8 +462,6 @@ onUnmounted(() => {
 }
 .name-input:focus { border-color: var(--color-accent); }
 .name-input::placeholder { color: var(--color-muted); }
-
-.saving-body { justify-content: center; }
 
 .save-actions {
   display: flex;

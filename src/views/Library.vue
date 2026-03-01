@@ -14,7 +14,7 @@
     <div v-if="patterns.length === 0" class="empty">
       <div class="empty-icon">⚗</div>
       <p class="empty-title">No patterns yet</p>
-      <p class="empty-sub">Record your High Alch clicks to get started</p>
+      <p class="empty-sub">Record a pattern to get started</p>
     </div>
 
     <!-- Pattern list -->
@@ -22,11 +22,13 @@
       <div v-for="pattern in patterns" :key="pattern.id" class="pattern-card">
 
         <div class="card-left">
-          <span class="card-name">{{ pattern.name }}</span>
+          <div class="card-name-row">
+            <span class="card-name">{{ pattern.name }}</span>
+            <span class="model-badge">{{ getModelName(pattern.modelId) }}</span>
+          </div>
           <div class="card-meta">
             <span class="card-stat">{{ pattern.clickCount }} clicks</span>
-            <span class="card-stat pool-spell">⚡ {{ pattern.spellCount ?? Math.ceil(pattern.clickCount / 2) }} spell</span>
-            <span class="card-stat pool-item">◈ {{ pattern.itemCount ?? Math.floor(pattern.clickCount / 2) }} item</span>
+            <span class="card-stat accent">{{ pattern.itemsPerCycle ?? 1 }} item{{ (pattern.itemsPerCycle ?? 1) > 1 ? 's' : '' }} / cycle</span>
             <span class="card-stat">{{ formatDuration(pattern.totalDuration) }}</span>
             <span class="card-stat">avg {{ pattern.avgInterval }}ms</span>
             <span class="card-stat">±{{ pattern.stdDevInterval }}ms</span>
@@ -60,10 +62,15 @@
 import { ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { usePatternsStore } from '../stores/patterns';
+import { getModel } from '../models/index.js';
 
 const store = usePatternsStore();
 const { patterns } = storeToRefs(store);
 const deleteTarget = ref(null);
+
+function getModelName(modelId) {
+  return getModel(modelId)?.name ?? modelId ?? 'Unknown';
+}
 
 function confirmDelete(pattern) { deleteTarget.value = pattern; }
 function doDelete() {
@@ -80,11 +87,14 @@ function formatDuration(ms) {
 }
 
 function exportPattern(pattern) {
+  const modelName = getModelName(pattern.modelId);
   const lines = [];
 
   lines.push(`PATTERN: ${pattern.name}`);
+  lines.push(`MODEL: ${modelName}`);
   lines.push(`RECORDED: ${new Date(pattern.createdAt).toLocaleString()}`);
-  lines.push(`CLICKS: ${pattern.clickCount}  (⚡ ${pattern.spellCount ?? '?'} spell  ◈ ${pattern.itemCount ?? '?'} item)`);
+  lines.push(`CLICKS: ${pattern.clickCount}`);
+  lines.push(`ITEMS PER CYCLE: ${pattern.itemsPerCycle ?? 1}`);
   lines.push(`DURATION: ${formatDuration(pattern.totalDuration)}`);
   lines.push(`AVG INTERVAL: ${pattern.avgInterval}ms`);
   lines.push(`STD DEV: ${pattern.stdDevInterval}ms`);
@@ -95,10 +105,10 @@ function exportPattern(pattern) {
   lines.push('─'.repeat(70));
 
   pattern.events.forEach((ev, i) => {
-    const num  = String(i + 1).padStart(4);
-    const type = (ev.type ?? (i % 2 === 0 ? 'spell' : 'item')).padEnd(5);
-    const x    = String(ev.x).padStart(7);
-    const y    = String(ev.y).padStart(7);
+    const num     = String(i + 1).padStart(4);
+    const type    = String(ev.type ?? '?').padEnd(5);
+    const x       = String(ev.x).padStart(7);
+    const y       = String(ev.y).padStart(7);
     const delta   = i === 0 ? '       —' : `${String(ev.delta).padStart(6)}ms`;
     const elapsed = `${(ev.elapsed / 1000).toFixed(3)}s`;
     lines.push(`${num}  | ${type} | ${x} | ${y} | ${delta} | ${elapsed}`);
@@ -109,11 +119,11 @@ function exportPattern(pattern) {
   const deltas = pattern.events.map(e => e.delta).slice(1);
   const buckets = { '<500': 0, '500-800': 0, '800-1200': 0, '1200-1800': 0, '>1800': 0 };
   deltas.forEach(d => {
-    if (d < 500) buckets['<500']++;
-    else if (d < 800) buckets['500-800']++;
+    if (d < 500)       buckets['<500']++;
+    else if (d < 800)  buckets['500-800']++;
     else if (d < 1200) buckets['800-1200']++;
     else if (d < 1800) buckets['1200-1800']++;
-    else buckets['>1800']++;
+    else               buckets['>1800']++;
   });
 
   lines.push('');
@@ -125,9 +135,9 @@ function exportPattern(pattern) {
   });
 
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
   a.download = `${pattern.name.replace(/\s+/g, '_')}_pattern.txt`;
   a.click();
   URL.revokeObjectURL(url);
@@ -188,9 +198,9 @@ function exportPattern(pattern) {
   gap: 8px;
   color: var(--color-muted);
 }
-.empty-icon { font-size: 48px; margin-bottom: 8px; }
+.empty-icon  { font-size: 48px; margin-bottom: 8px; }
 .empty-title { font-size: 18px; font-weight: 600; color: var(--color-text); }
-.empty-sub { font-size: 13px; }
+.empty-sub   { font-size: 13px; }
 
 .pattern-list {
   display: flex;
@@ -215,9 +225,27 @@ function exportPattern(pattern) {
   gap: 6px;
 }
 
+.card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .card-name {
   font-weight: 700;
   font-size: 15px;
+}
+
+.model-badge {
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .card-meta {
@@ -235,13 +263,9 @@ function exportPattern(pattern) {
   padding: 2px 6px;
 }
 
-.pool-spell { color: #a78bfa; border-color: #4c1d95; }
-.pool-item  { color: #34d399; border-color: #064e3b; }
+.card-stat.accent { color: var(--color-accent); border-color: #7c4f0a; }
 
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
+.card-actions { display: flex; gap: 8px; }
 
 .btn-icon {
   width: 32px;

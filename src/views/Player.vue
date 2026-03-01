@@ -6,7 +6,10 @@
       <button @click="router.push('/')" class="btn-back">← Back</button>
       <div>
         <h1 class="player-title">{{ pattern?.name }}</h1>
-        <p class="player-sub">{{ pattern?.clickCount }} clicks · {{ durationFmt(pattern?.totalDuration) }} · avg {{ pattern?.avgInterval }}ms</p>
+        <p class="player-sub">
+          <span class="model-badge">{{ modelName }}</span>
+          {{ pattern?.clickCount }} clicks · {{ durationFmt(pattern?.totalDuration) }} · avg {{ pattern?.avgInterval }}ms
+        </p>
       </div>
     </div>
 
@@ -24,6 +27,13 @@
             <button @click="reps++" :disabled="playing || countdown > 0" class="btn-counter">+</button>
           </div>
           <p class="config-label">{{ reps * (pattern?.clickCount || 0) }} total clicks</p>
+
+          <!-- Items needed warning -->
+          <div class="items-needed" v-if="itemsNeeded > 0">
+            <span class="items-needed-label">Items needed</span>
+            <span class="items-needed-value">{{ itemsNeeded }}</span>
+            <span class="items-needed-hint">{{ itemsPerCycleLabel }}</span>
+          </div>
         </section>
 
         <!-- Timing Variance -->
@@ -77,15 +87,19 @@
             <span class="stat-value">{{ currentRep }} / {{ reps }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Casts</span>
+            <span class="stat-label">Clicks</span>
             <span class="stat-value font-mono">{{ totalCasts }}</span>
+          </div>
+          <div class="stat-card" v-if="itemsNeeded > 0">
+            <span class="stat-label">Items used</span>
+            <span class="stat-value font-mono">{{ itemsUsed }}</span>
           </div>
         </div>
 
         <div class="progress-bar-wrap">
           <div class="progress-bar" :style="{ width: progressPct + '%' }"></div>
         </div>
-        <p class="progress-label">{{ totalCasts }} / {{ reps * (pattern?.clickCount || 0) }}</p>
+        <p class="progress-label">{{ totalCasts }} / {{ reps * (pattern?.clickCount || 0) }} clicks</p>
 
         <!-- Countdown display -->
         <div v-if="countdown > 0" class="countdown-ring">
@@ -114,29 +128,63 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePatternsStore } from '../stores/patterns.js';
+import { getModel } from '../models/index.js';
 
-const route = useRoute();
+const route  = useRoute();
 const router = useRouter();
-const store = usePatternsStore();
+const store  = usePatternsStore();
 
 const pattern = computed(() => store.getPattern(route.params.id));
+const model   = computed(() => pattern.value ? getModel(pattern.value.modelId) : null);
+const modelName = computed(() => model.value?.name ?? 'Unknown');
 
 // Config
-const reps = ref(10);
+const reps           = ref(10);
 const varianceFactor = ref(1.0);
-const afkChance = ref(0.01);
-const afkMinSec = ref(3);
-const afkMaxSec = ref(15);
+const afkChance      = ref(0.01);
+const afkMinSec      = ref(3);
+const afkMaxSec      = ref(15);
 
 // State
-const playing = ref(false);
+const playing    = ref(false);
 const currentRep = ref(0);
 const totalCasts = ref(0);
-const afkActive = ref(false);
-const countdown = ref(0);
+const afkActive  = ref(false);
+const countdown  = ref(0);
 
 let countdownTimer = null;
 
+// ── Items needed calculation ──────────────────────────────────────────────────
+const cyclesPerRep = computed(() => {
+  if (!pattern.value) return 0;
+  const clickCount     = pattern.value.clickCount ?? 0;
+  const itemsPerCycle  = pattern.value.itemsPerCycle ?? 1;
+  // One cycle = itemsPerCycle items consumed
+  // clickCount / 2 = number of cycles in one rep (assuming 2 clicks per cycle)
+  return Math.floor(clickCount / 2);
+});
+
+const itemsPerCycle = computed(() => pattern.value?.itemsPerCycle ?? 1);
+
+const itemsNeeded = computed(() =>
+  reps.value * cyclesPerRep.value * itemsPerCycle.value
+);
+
+const itemsUsed = computed(() => {
+  if (!pattern.value) return 0;
+  const cyclesDone = Math.floor(totalCasts.value / 2);
+  return cyclesDone * itemsPerCycle.value;
+});
+
+const itemsPerCycleLabel = computed(() => {
+  const ipc = itemsPerCycle.value;
+  if (!model.value) return '';
+  if (model.value.id === 'dart')       return `${ipc} darts per cycle`;
+  if (model.value.id === 'high-alch')  return `${ipc} item per cycle`;
+  return `${ipc} per cycle`;
+});
+
+// ── Progress ──────────────────────────────────────────────────────────────────
 const progressPct = computed(() => {
   const total = reps.value * (pattern.value?.clickCount || 0);
   if (total === 0) return 0;
@@ -153,14 +201,15 @@ function durationFmt(ms) {
 
 function buildConfig() {
   return {
-    reps: reps.value,
+    reps:          reps.value,
     varianceFactor: varianceFactor.value,
-    afkChance: afkChance.value,
-    afkMinMs: afkMinSec.value * 1000,
-    afkMaxMs: afkMaxSec.value * 1000,
+    afkChance:     afkChance.value,
+    afkMinMs:      afkMinSec.value * 1000,
+    afkMaxMs:      afkMaxSec.value * 1000,
   };
 }
 
+// ── Playback controls ─────────────────────────────────────────────────────────
 function beginCountdown() {
   if (playing.value || countdown.value > 0) return;
   countdown.value = 5;
@@ -186,7 +235,7 @@ async function startPlayback() {
   if (!pattern.value) return;
   totalCasts.value = 0;
   currentRep.value = 0;
-  playing.value = true;
+  playing.value    = true;
   const rawPattern = JSON.parse(JSON.stringify(pattern.value));
   await window.electronAPI.registerHotkey('F6');
   window.electronAPI.startPlayback(rawPattern, buildConfig());
@@ -213,7 +262,7 @@ onMounted(() => {
 
   window.electronAPI.onHotkeyPlay(async () => {
     if (countdown.value > 0) {
-      cancelCountdown(); // F6 during countdown cancels it
+      cancelCountdown();
     } else if (!playing.value) {
       beginCountdown();
     }
@@ -270,7 +319,21 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-badge {
+  background: var(--color-panel);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .player-body {
@@ -312,12 +375,7 @@ onUnmounted(() => {
   color: var(--color-muted);
 }
 
-.hint {
-  margin-top: 4px;
-  font-size: 10px;
-  opacity: 0.7;
-}
-
+.hint { margin-top: 4px; font-size: 10px; opacity: 0.7; }
 .mt-2 { margin-top: 8px; }
 
 .slider-row {
@@ -327,10 +385,7 @@ onUnmounted(() => {
   margin-bottom: 8px;
 }
 
-.slider {
-  width: 100%;
-  accent-color: var(--color-accent);
-}
+.slider { width: 100%; accent-color: var(--color-accent); }
 
 .reps-row {
   display: flex;
@@ -363,6 +418,40 @@ onUnmounted(() => {
   text-align: center;
 }
 
+/* ── Items needed ── */
+.items-needed {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 2px solid var(--color-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.items-needed-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.items-needed-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--color-accent);
+}
+
+.items-needed-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+/* ── Dashboard ── */
 .dashboard {
   flex: 1;
   display: flex;
@@ -373,10 +462,7 @@ onUnmounted(() => {
   gap: 24px;
 }
 
-.dash-stats {
-  display: flex;
-  gap: 16px;
-}
+.dash-stats { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
 .stat-card {
   background: var(--color-surface);
