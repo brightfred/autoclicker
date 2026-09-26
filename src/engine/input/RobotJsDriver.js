@@ -9,9 +9,10 @@ export class RobotJsDriver extends InputDriver {
     super();
     this.robot = robot;
 
-    // robotjs waits 10ms after EVERY move by default — that would make my
-    // paths slow and jerky. The MouseMover handles all the timing itself.
+    // robotjs waits after EVERY move/key by default — that would make my
+    // paths slow and jerky. The engine handles all the timing itself.
     this.robot.setMouseDelay(0);
+    this.robot.setKeyboardDelay(0);
   }
 
   getPosition() {
@@ -22,7 +23,19 @@ export class RobotJsDriver extends InputDriver {
     this.robot.moveMouse(Math.round(x), Math.round(y));
   }
 
-  click(button = 'left') {
-    this.robot.mouseClick(button);
+  mouseDown(button = 'left') {
+    this.robot.mouseToggle('down', button);
+  }
+
+  mouseUp(button = 'left') {
+    this.robot.mouseToggle('up', button);
+  }
+
+  keyDown(key) {
+    this.robot.keyToggle(key, 'down');
+  }
+
+  keyUp(key) {
+    this.robot.keyToggle(key, 'up');
   }
 }

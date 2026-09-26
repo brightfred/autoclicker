@@ -1,11 +1,11 @@
 <template>
-  <div class="targets-view">
+  <div class="page">
 
     <!-- Header -->
-    <div class="header">
+    <div class="page-header">
       <div>
-        <h1 class="title">Targets</h1>
-        <p class="sub">Name the things on screen the clicker will use — banker, tiles, bank items, inventory.</p>
+        <h1 class="page-title">Targets</h1>
+        <p class="page-sub">Name the things on screen the clicker will use — banker, tiles, bank items, inventory.</p>
       </div>
       <div class="header-actions">
         <button class="btn-ghost" @click="doImport" title="Import targets from a .json file">⤒ Import</button>
@@ -87,12 +87,12 @@
           <div class="card-body">
             <div class="card-name-row">
               <span class="card-name">{{ t.name }}</span>
-              <span class="kind-badge">{{ getKind(t.kind).label }}</span>
+              <span class="badge" :style="{ '--badge': getKind(t.kind).color }">{{ getKind(t.kind).label }}</span>
             </div>
             <div class="card-meta">
-              <span class="card-stat">x {{ t.rect.x }} · y {{ t.rect.y }}</span>
-              <span class="card-stat">{{ t.rect.w }} × {{ t.rect.h }} px</span>
-              <span v-if="t.kind === 'inventory'" class="card-stat accent">28 slots · {{ slotSize(t.rect) }}</span>
+              <span class="stat">x {{ t.rect.x }} · y {{ t.rect.y }}</span>
+              <span class="stat">{{ t.rect.w }} × {{ t.rect.h }} px</span>
+              <span v-if="t.kind === 'inventory'" class="stat accent">28 slots · {{ slotSize(t.rect) }}</span>
             </div>
           </div>
 
@@ -306,31 +306,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.targets-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 28px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* ── Header ── */
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-.title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.sub { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
-.header-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
 /* ── Setup bar ── */
 .setup-bar {
   display: flex;
@@ -340,45 +315,10 @@ onMounted(() => {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
 }
-.field-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-  margin-right: 4px;
-}
-.select, .input {
-  background: var(--color-panel);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  padding: 7px 10px;
-  outline: none;
-  transition: border-color 0.15s;
-}
+.setup-bar .field-label { margin-right: 4px; }
 .select { min-width: 220px; }
-.select:focus, .input:focus { border-color: var(--color-accent); }
-.input { flex: 1; user-select: text; -webkit-user-select: text; }
+.input { flex: 1; }
 
-/* ── Panels ── */
-.panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.panel-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-}
 .count { color: var(--color-accent); margin-left: 6px; }
 
 .kind-grid {
@@ -444,141 +384,9 @@ onMounted(() => {
 .card-name-row { display: flex; align-items: center; gap: 10px; }
 .card-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.kind-badge {
-  border: 1px solid var(--kind);
-  color: var(--kind);
-  padding: 1px 6px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
 .card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
-.card-stat {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-muted);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  padding: 2px 6px;
-}
-.card-stat.accent { color: var(--kind); border-color: color-mix(in srgb, var(--kind) 40%, transparent); }
+.stat.accent { color: var(--kind); border-color: color-mix(in srgb, var(--kind) 40%, transparent); }
 
 .card-actions { display: flex; gap: 6px; }
 
-/* ── Buttons ── */
-.btn-primary {
-  background: var(--color-accent);
-  color: #0a0c0f;
-  border: none;
-  padding: 9px 18px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-.btn-primary:hover:not(:disabled) { background: #f8b84e; }
-.btn-primary:disabled { opacity: 0.4; cursor: default; }
-
-.btn-ghost, .btn-small {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  color: var(--color-muted);
-  font-family: var(--font-display);
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.btn-ghost { padding: 8px 14px; font-size: 13px; }
-.btn-small { padding: 6px 10px; font-size: 12px; }
-.btn-ghost:hover, .btn-small:hover:not(:disabled) { border-color: var(--color-text); color: var(--color-text); }
-.btn-small.danger:hover:not(:disabled) { border-color: var(--color-red); color: var(--color-red); }
-.btn-small:disabled { opacity: 0.3; cursor: default; }
-
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-muted);
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.15s;
-}
-.btn-icon:hover { color: var(--color-accent); border-color: var(--color-accent); background: rgba(245, 166, 35, 0.1); }
-.btn-delete { color: var(--color-red); }
-.btn-delete:hover { color: var(--color-red); background: rgba(239, 68, 68, 0.1); border-color: var(--color-red); }
-
-.btn-danger {
-  padding: 8px 16px;
-  background: var(--color-red);
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-}
-.btn-danger:hover { background: #dc2626; }
-
-/* ── Empty state ── */
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 36px 0;
-  color: var(--color-muted);
-  border: 1px dashed var(--color-border);
-}
-.empty-icon  { font-size: 36px; }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--color-text); }
-.empty-sub   { font-size: 13px; }
-
-/* ── Modals ── */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-.modal {
-  background: var(--color-panel);
-  border: 1px solid var(--color-border);
-  padding: 24px;
-  width: 340px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.modal-title { font-size: 15px; line-height: 1.5; }
-.modal-sub   { display: block; font-size: 12px; color: var(--color-muted); margin-top: 4px; }
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
-
-/* ── Toast ── */
-.toast {
-  position: fixed;
-  bottom: 20px;
-  right: 24px;
-  padding: 10px 16px;
-  background: var(--color-panel);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-green);
-  font-size: 13px;
-  font-weight: 600;
-  z-index: 200;
-}
-.toast.error { border-left-color: var(--color-red); }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

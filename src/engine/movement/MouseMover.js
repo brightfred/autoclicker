@@ -35,13 +35,6 @@ export class MouseMover {
     return this.#follow(path, shouldStop);
   }
 
-  /** Move to `to` then click */
-  async clickAt(to, { button = 'left', ...opts } = {}) {
-    const reached = await this.moveTo(to, opts);
-    if (reached) this.driver.click(button);
-    return reached;
-  }
-
   async #follow(path, shouldStop) {
     const start = Date.now();
     const total = path.at(-1).t;

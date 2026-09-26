@@ -7,7 +7,7 @@
 // handles each monitor's size/scaling separately and it's much more reliable.
 //
 // Coordinates:
-//   Targets are saved in REAL screen pixels (same as uiohook / robotjs use).
+//   Targets are saved in REAL screen pixels (same as robotjs uses).
 //   The overlay page works in Electron's DIP pixels. On Windows I convert
 //   between the two with screen.screenToDipPoint / dipToScreenPoint, so it
 //   still lines up if a monitor is scaled (125%, 150%...).
