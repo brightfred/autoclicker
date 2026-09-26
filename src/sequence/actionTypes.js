@@ -34,6 +34,13 @@ export const ACTION_TYPES = {
     color: '#a78bfa',
     create: () => ({ id: newStepId(), type: 'key', key: 'escape' }),
   },
+  // A spot where a break is allowed — the efficiency slider decides if/how long
+  breakpoint: {
+    label: 'Break point',
+    icon:  '☕',
+    color: '#22c55e',
+    create: () => ({ id: newStepId(), type: 'breakpoint' }),
+  },
 };
 
 // Keys I can pick for a "Press key" step (value = robotjs key name)

@@ -41,6 +41,19 @@ export class JsonFileStore {
     return this.createEmpty();
   }
 
+  /**
+   * Same as load(), but if the file doesn't exist yet I write the defaults to
+   * disk — used for config files I want to be able to open and edit by hand.
+   */
+  async loadOrCreate() {
+    try {
+      await fs.access(this.filePath);
+    } catch {
+      await this.save(this.createEmpty());
+    }
+    return this.load();
+  }
+
   async save(data) {
     if (!this.validate(data)) throw new Error(`Refusing to save invalid ${this.label} data`);
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });

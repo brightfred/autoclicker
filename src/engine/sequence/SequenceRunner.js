@@ -1,18 +1,26 @@
 // ── SequenceRunner ────────────────────────────────────────────────────────────
 // Runs the steps of a sequence strictly in order, loop after loop, until the
-// loop count is reached or I stop it. It only knows about the Action interface,
-// never about what a specific action does.
+// loop count is reached or I stop it. It only knows about the Action and
+// BreakPolicy interfaces, never about what a specific action or policy does.
+//
+// Breaks only happen at break points: every "Break point" step, or — if the
+// sequence has none — at the end of each loop.
 //
 // Status updates go out through onStatus() so the UI can highlight the
 // current step — the runner itself knows nothing about windows or IPC.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { NoBreakPolicy } from '../efficiency/BreakPolicy.js';
+import { SessionClock } from '../efficiency/SessionClock.js';
 
 // Short natural pause between two steps, like a human reacting (ms)
 export const DEFAULT_REACTION_MS = [90, 240];
 
 export class SequenceRunner {
   #stopRequested = false;
-  #running = false;
+  #running  = false;
+  #position = {};       // { loop, loops, step, stepId } — sent with every status
+  #breaks   = 0;        // how many breaks this run
 
   /**
    * @param {object}   opts
@@ -58,8 +66,10 @@ export class SequenceRunner {
   /**
    * @param {object}   sequence - { actions: [...], loops } (loops 0 = forever)
    * @param {object[]} targets  - targets of the sequence's setup
+   * @param {object}   [opts]
+   * @param {import('../efficiency/BreakPolicy.js').BreakPolicy} [opts.breakPolicy]
    */
-  async run(sequence, targets) {
+  async run(sequence, targets, { breakPolicy = new NoBreakPolicy() } = {}) {
     if (this.#running) return;
 
     const problems = this.validate(sequence, targets);
@@ -70,35 +80,74 @@ export class SequenceRunner {
 
     const actions = sequence.actions.map(def => this.registry.create(def));
     const loops   = sequence.loops > 0 ? sequence.loops : Infinity;
-    const ctx     = this.#context(targets);
+    const clock   = new SessionClock();
+    const ctx     = this.#context(targets, { clock, breakPolicy });
+
+    // No break point steps → the end of each loop is the break point
+    const hasBreakPoints = sequence.actions.some(a => a.type === 'breakpoint');
 
     this.#running = true;
     this.#stopRequested = false;
+    this.#breaks = 0;
+    clock.start();
 
     try {
       for (let loop = 1; loop <= loops && !ctx.shouldStop(); loop++) {
         for (let step = 0; step < actions.length && !ctx.shouldStop(); step++) {
-          this.onStatus({ running: true, loop, loops: sequence.loops, step, stepId: sequence.actions[step].id });
+          this.#position = { loop, loops: sequence.loops, step, stepId: sequence.actions[step].id };
+          this.#emit(clock);
           await actions[step].execute(ctx);
-          await ctx.sleep(this.#between(this.reactionMs));
+
+          // Natural reaction pause, a bit slower when I'm "tired"
+          const pace = breakPolicy.paceMultiplier(clock.snapshot(breakPolicy.kinds));
+          await ctx.sleep(this.#between(this.reactionMs) * pace);
         }
+        if (!hasBreakPoints && !ctx.shouldStop()) await ctx.breakPoint();
       }
-      this.onStatus({ running: false, done: true, stopped: this.#stopRequested });
+      this.onStatus({ running: false, done: true, stopped: this.#stopRequested, ...this.#stats(clock) });
     } catch (err) {
       console.error('[SEQUENCE] Error:', err);
-      this.onStatus({ running: false, done: true, error: err.message });
+      this.onStatus({ running: false, done: true, error: err.message, ...this.#stats(clock) });
     } finally {
       this.#running = false;
     }
   }
 
-  #context(targets) {
+  // ── Internals ──────────────────────────────────────────────────────────────
+
+  #context(targets, { clock, breakPolicy } = {}) {
     return {
       engine:     this.engine,
       targets:    new Map(targets.map(t => [t.id, t])),
       shouldStop: () => this.#stopRequested,
       sleep:      (ms) => this.#sleep(ms),
+      breakPoint: () => this.#breakPoint(clock, breakPolicy),
     };
+  }
+
+  // Ask the policy if I take a break here; if yes, wait it out (stoppable)
+  async #breakPoint(clock, policy) {
+    if (!clock || !policy) return;
+    const decision = policy.decide(clock.snapshot(policy.kinds));
+    if (!decision) return;
+
+    this.#emit(clock, { onBreak: { kind: decision.kind, label: decision.label, ms: decision.ms } });
+
+    const startedAt = Date.now();
+    await this.#sleep(decision.ms);
+    clock.addBreak(Date.now() - startedAt, decision.kind);
+    policy.onBreakTaken(decision);
+    this.#breaks++;
+
+    if (!this.#stopRequested) this.#emit(clock);
+  }
+
+  #emit(clock, extra = {}) {
+    this.onStatus({ running: true, ...this.#position, ...this.#stats(clock), ...extra });
+  }
+
+  #stats(clock) {
+    return { activeMs: clock.activeMs, breakMs: clock.breakMs, breaks: this.#breaks };
   }
 
   // Sleep in small chunks so Stop reacts within ~50ms, even during a long wait

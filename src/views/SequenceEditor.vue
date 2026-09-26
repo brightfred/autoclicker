@@ -6,8 +6,11 @@
       <button class="btn-ghost back" @click="router.push('/')">←</button>
       <input v-model="seq.name" class="name-input" maxlength="40" :disabled="busy" />
 
-      <div class="status-pill" :class="`is-${run.state}`">
+      <div class="status-pill" :class="[`is-${run.state}`, { 'is-break': run.onBreak }]">
         <template v-if="run.state === 'countdown'">Starting in {{ run.countdown }}…</template>
+        <template v-else-if="run.state === 'running' && run.onBreak">
+          ☕ {{ run.onBreak.label }} · {{ breakLeft }}
+        </template>
         <template v-else-if="run.state === 'running'">
           Loop {{ run.loop }}{{ seq.loops > 0 ? ` / ${seq.loops}` : '' }} · Step {{ run.step + 1 }} / {{ seq.actions.length }}
         </template>
@@ -52,6 +55,41 @@
       <span class="stat" title="Rough time for one loop, using the middle of each wait">≈ {{ loopEstimate }} / loop</span>
     </div>
 
+    <!-- Efficiency: how often / how long I take breaks -->
+    <div class="efficiency-bar">
+      <div class="eff-row">
+        <span class="field-label">Efficiency</span>
+        <input
+          type="range" min="50" max="100" step="1"
+          class="slider"
+          :value="Math.round(seq.efficiency * 100)"
+          :disabled="busy"
+          :style="{ '--fill': `${(seq.efficiency * 100 - 50) * 2}%` }"
+          @input="seq.efficiency = Number($event.target.value) / 100"
+        />
+        <span class="eff-value">{{ Math.round(seq.efficiency * 100) }}%</span>
+        <span class="eff-mood">{{ mood }}</span>
+
+        <label class="setting">
+          <span class="field-label">Profile</span>
+          <select v-model="seq.breakProfile" class="select sm" :disabled="busy || seq.efficiency >= 1">
+            <option v-for="(p, id) in profiles" :key="id" :value="id">{{ p.label }}</option>
+          </select>
+        </label>
+        <button class="btn-icon sm" title="Edit break profiles (efficiency.json)" @click="openProfiles">⚙</button>
+      </div>
+
+      <!-- Live numbers while running, last run's numbers after, otherwise a hint -->
+      <div class="eff-info">
+        <template v-if="stats">
+          <span class="stat" title="Time spent working">▶ working {{ fmtTime(stats.activeMs) }}</span>
+          <span class="stat" title="Time spent on breaks">☕ {{ stats.breaks }} break{{ stats.breaks !== 1 ? 's' : '' }} · {{ fmtTime(stats.breakMs) }}</span>
+          <span class="stat accent" title="Real efficiency so far">real {{ realEfficiency }}</span>
+        </template>
+        <span v-else class="eff-hint">{{ efficiencyHint }}</span>
+      </div>
+    </div>
+
     <!-- Problems found when I tried to start -->
     <div v-if="problems.length" class="problems">
       <div class="problems-head">
@@ -67,7 +105,7 @@
       <aside class="palette">
         <div class="panel-title">Actions</div>
         <div
-          v-for="type in ['wait', 'key']"
+          v-for="type in ['wait', 'key', 'breakpoint']"
           :key="type"
           class="palette-item"
           :class="{ locked: busy }"
@@ -195,6 +233,14 @@
                 </select>
               </template>
 
+              <!-- Break point -->
+              <template v-else-if="step.type === 'breakpoint'">
+                <span class="step-verb">Break point</span>
+                <span class="step-note">
+                  {{ seq.efficiency >= 1 ? 'no breaks at 100% efficiency' : 'a break may happen here' }}
+                </span>
+              </template>
+
               <span v-if="stepIssue(step)" class="step-issue">⚠ {{ stepIssue(step) }}</span>
             </div>
 
@@ -253,10 +299,63 @@ const targetById = computed(() => new Map(targets.value.map(t => [t.id, t])));
 
 // ── Run state ────────────────────────────────────────────────────────────────
 
-const run = reactive({ state: 'idle', countdown: 0, loop: 0, step: 0, stepId: null });
+const run = reactive({ state: 'idle', countdown: 0, loop: 0, step: 0, stepId: null, onBreak: null, breakEndsAt: 0 });
+const stats    = ref(null);      // { activeMs, breakMs, breaks } — live, then last run's
+const profiles = ref({});        // break profiles from efficiency.json
+const now      = ref(Date.now()); // ticks while running, for the break countdown
+let ticker = null;
 const busy     = computed(() => run.state !== 'idle');
 const problems = ref([]);
 let countdownTimer = null;
+
+// ── Efficiency ───────────────────────────────────────────────────────────────
+
+const MOODS = [
+  [1.00, 'No breaks'],
+  [0.93, 'Locked in'],
+  [0.85, 'Focused'],
+  [0.75, 'Relaxed'],
+  [0.65, 'Casual'],
+  [0,    'Distracted'],
+];
+
+const mood = computed(() => MOODS.find(([min]) => seq.value.efficiency >= min)[1]);
+
+const breakPointCount = computed(() => seq.value.actions.filter(a => a.type === 'breakpoint').length);
+
+const efficiencyHint = computed(() => {
+  if (seq.value.efficiency >= 1) return 'Never takes a break';
+  const perHour = Math.round(60 * (1 - seq.value.efficiency));
+  const where = breakPointCount.value > 0
+    ? `at ${breakPointCount.value} break point${breakPointCount.value !== 1 ? 's' : ''}`
+    : 'at the end of each loop';
+  return `≈ ${perHour} min of breaks / hour, ${where}`;
+});
+
+const realEfficiency = computed(() => {
+  const { activeMs, breakMs } = stats.value;
+  const total = activeMs + breakMs;
+  return total > 0 ? `${((activeMs / total) * 100).toFixed(1)}%` : '—';
+});
+
+const breakLeft = computed(() => fmtTime(Math.max(0, run.breakEndsAt - now.value)));
+
+// Open efficiency.json in my editor, then reload it when I come back
+async function openProfiles() {
+  await window.electronAPI.openEfficiencyFile();
+}
+
+async function reloadProfiles() {
+  profiles.value = (await window.electronAPI.loadEfficiency()).profiles;
+}
+
+function fmtTime(ms) {
+  const s = Math.round(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${String(m % 60).padStart(2, '0')}m`;
+  return m > 0 ? `${m}:${String(s % 60).padStart(2, '0')}` : `${s}s`;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -397,6 +496,7 @@ async function beginCountdown() {
 }
 
 async function start() {
+  stats.value = null;
   run.state = 'running';
   run.loop = 1;
   run.step = 0;
@@ -418,16 +518,22 @@ function stop() {
 }
 
 function onStatus(status) {
+  if ('activeMs' in status) {
+    stats.value = { activeMs: status.activeMs, breakMs: status.breakMs, breaks: status.breaks };
+  }
   if (status.running) {
-    run.state  = 'running';
-    run.loop   = status.loop;
-    run.step   = status.step;
-    run.stepId = status.stepId;
+    run.state   = 'running';
+    run.loop    = status.loop;
+    run.step    = status.step;
+    run.stepId  = status.stepId;
+    run.onBreak = status.onBreak ?? null;
+    if (status.onBreak) run.breakEndsAt = Date.now() + status.onBreak.ms;
     return;
   }
   if (status.done) {
-    run.state  = 'idle';
-    run.stepId = null;
+    run.state   = 'idle';
+    run.stepId  = null;
+    run.onBreak = null;
     if (status.problems) problems.value = status.problems;
     else if (status.error) showToast(`Stopped: ${status.error}`, 'error');
     else showToast(status.stopped ? 'Stopped' : 'Finished all loops');
@@ -445,6 +551,10 @@ onMounted(async () => {
   if (!seqStore.loaded) await seqStore.load();
   if (!targetStore.loaded) await targetStore.load();
 
+  await reloadProfiles();
+  window.addEventListener('focus', reloadProfiles); // picks up my edits to efficiency.json
+  ticker = setInterval(() => { now.value = Date.now(); }, 250);
+
   window.electronAPI.onSequenceStatus(onStatus);
   window.electronAPI.onHotkeyPlay(onHotkey);
   window.electronAPI.registerHotkey('F6');
@@ -452,6 +562,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearInterval(countdownTimer);
+  clearInterval(ticker);
+  window.removeEventListener('focus', reloadProfiles);
   if (run.state === 'running') window.electronAPI.stopSequence();
   window.electronAPI.offSequenceStatus();
   window.electronAPI.offHotkeyPlay();
@@ -500,6 +612,7 @@ onBeforeUnmount(() => {
 }
 .status-pill.is-countdown { color: var(--color-accent); border-color: var(--color-accent); }
 .status-pill.is-running   { color: var(--color-green); border-color: var(--color-green); }
+.status-pill.is-break     { color: var(--color-accent); border-color: var(--color-accent); }
 
 .run-btn { display: flex; align-items: center; gap: 8px; }
 .run-btn kbd {
@@ -536,6 +649,43 @@ onBeforeUnmount(() => {
 .check { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--color-muted); cursor: pointer; }
 .check input { accent-color: var(--color-accent); }
 .settings-spacer { flex: 1; }
+
+/* ── Efficiency ── */
+.efficiency-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.eff-row  { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.eff-info { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 120px;
+  height: 4px;
+  background: linear-gradient(to right, var(--color-accent) var(--fill), var(--color-border) var(--fill));
+  outline: none;
+  cursor: pointer;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 0 0 1px var(--color-accent);
+  cursor: pointer;
+}
+.slider:disabled { opacity: 0.5; cursor: default; }
+.eff-value { font-family: var(--font-mono); font-size: 14px; color: var(--color-accent); width: 40px; }
+.eff-mood  { font-size: 12px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; width: 84px; }
+.eff-hint  { font-size: 12px; color: var(--color-muted); }
+.stat.accent { color: var(--color-accent); border-color: #7c4f0a; }
+.step-note { font-size: 12px; color: var(--color-muted); font-style: italic; }
 
 /* ── Problems ── */
 .problems {

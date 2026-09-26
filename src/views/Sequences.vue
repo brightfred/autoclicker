@@ -50,6 +50,7 @@
           <div class="seq-meta">
             <span class="stat">{{ seq.actions.length }} step{{ seq.actions.length !== 1 ? 's' : '' }}</span>
             <span class="stat">{{ seq.loops > 0 ? `${seq.loops} loop${seq.loops !== 1 ? 's' : ''}` : 'loops forever' }}</span>
+            <span class="stat" title="Efficiency">☕ {{ Math.round((seq.efficiency ?? 1) * 100) }}%</span>
             <span class="stat preview">{{ preview(seq) }}</span>
           </div>
         </div>

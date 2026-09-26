@@ -11,6 +11,7 @@
  * @property {Map<string, object>} targets   - targets of the setup, by id
  * @property {() => boolean} shouldStop      - true once I pressed Stop / F6
  * @property {(ms:number) => Promise<boolean>} sleep - stoppable sleep, false if stopped
+ * @property {() => Promise<void>} breakPoint - maybe take a break here (efficiency policy decides)
  */
 
 export class Action {

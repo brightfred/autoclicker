@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onSequenceStatus:  (callback) => ipcRenderer.on('sequence-status', (_, status) => callback(status)),
   offSequenceStatus: ()         => ipcRenderer.removeAllListeners('sequence-status'),
 
+  // Efficiency (break profiles in efficiency.json)
+  loadEfficiency: () => ipcRenderer.invoke('efficiency-load'),
+  openEfficiencyFile: () => ipcRenderer.invoke('efficiency-open'),
+
   // Hotkey
   registerHotkey:   (key) => ipcRenderer.invoke('hotkey-register', key),
   unregisterHotkey: (key) => ipcRenderer.invoke('hotkey-unregister', key),

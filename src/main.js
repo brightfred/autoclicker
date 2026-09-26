@@ -5,15 +5,17 @@
 // those live in src/engine/* and src/utils/*.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { targetsFile } from './utils/targetsFile.js';
 import { sequencesFile } from './utils/sequencesFile.js';
+import { efficiencyFile } from './utils/efficiencyFile.js';
 import { openOverlay } from './utils/overlay.js';
 import { createEngine } from './engine/index.js';
 import { SequenceRunner } from './engine/sequence/SequenceRunner.js';
 import { createDefaultRegistry } from './engine/sequence/ActionRegistry.js';
+import { createBreakPolicy } from './engine/efficiency/index.js';
 
 if (started) app.quit();
 
@@ -124,16 +126,29 @@ ipcMain.handle('sequence-validate', async (_, { sequence, targets }) => {
   return (await getRunner()).validate(sequence, targets);
 });
 
-// Start running — resolves right away, progress comes through 'sequence-status'
+// Start running — resolves right away, progress comes through 'sequence-status'.
+// efficiency.json is re-read on every start, so my edits apply without a restart.
 ipcMain.handle('sequence-start', async (_, { sequence, targets }) => {
   const r = await getRunner();
   if (r.running) return false;
-  r.run(sequence, targets); // not awaited on purpose
+  const breakPolicy = createBreakPolicy(sequence, await efficiencyFile.loadOrCreate());
+  r.run(sequence, targets, { breakPolicy }); // not awaited on purpose
   return true;
 });
 
 ipcMain.handle('sequence-stop', () => {
   runner?.stop();
+});
+
+// ── Efficiency ────────────────────────────────────────────────────────────────
+// Break profiles (High alch, Firemaking...) live in efficiency.json
+
+ipcMain.handle('efficiency-load', () => efficiencyFile.loadOrCreate());
+
+// Open efficiency.json in my default editor so I can tune the breaks
+ipcMain.handle('efficiency-open', async () => {
+  await efficiencyFile.loadOrCreate();
+  return shell.openPath(efficiencyFile.filePath);
 });
 
 // ── Hotkey ────────────────────────────────────────────────────────────────────

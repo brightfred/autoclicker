@@ -3,16 +3,23 @@
 // this store keeps a copy for the UI and auto-saves shortly after any change.
 //
 // A sequence looks like:
-//   { id, name, setupId, loops (0 = forever), actions: [step, step, ...], createdAt }
+//   { id, name, setupId, loops (0 = forever), actions: [step, step, ...],
+//     efficiency (0.5..1), breakProfile ('general', 'high-alch'...), createdAt }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import { DEFAULT_EFFICIENCY, DEFAULT_PROFILE_ID } from '../engine/efficiency/defaults.js';
 
 const SAVE_DELAY_MS = 300; // wait until I stop typing before writing the file
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// Sequences saved before the efficiency slider existed get the defaults
+function withDefaults(seq) {
+  return { efficiency: DEFAULT_EFFICIENCY, breakProfile: DEFAULT_PROFILE_ID, ...seq };
 }
 
 export const useSequencesStore = defineStore('sequences', () => {
@@ -27,7 +34,7 @@ export const useSequencesStore = defineStore('sequences', () => {
 
   async function load() {
     const data = await window.electronAPI.loadSequences();
-    sequences.value = data.sequences;
+    sequences.value = data.sequences.map(withDefaults);
     loaded.value = true;
   }
 
@@ -44,7 +51,11 @@ export const useSequencesStore = defineStore('sequences', () => {
   }
 
   function addSequence({ name, setupId }) {
-    const seq = { id: newId(), name, setupId, loops: 0, actions: [], createdAt: new Date().toISOString() };
+    const seq = {
+      id: newId(), name, setupId, loops: 0, actions: [],
+      efficiency: DEFAULT_EFFICIENCY, breakProfile: DEFAULT_PROFILE_ID,
+      createdAt: new Date().toISOString(),
+    };
     sequences.value.push(seq);
     return seq;
   }
@@ -67,7 +78,7 @@ export const useSequencesStore = defineStore('sequences', () => {
 
   async function importAll() {
     const res = await window.electronAPI.importSequences();
-    if (res.ok) sequences.value = res.data.sequences;
+    if (res.ok) sequences.value = res.data.sequences.map(withDefaults);
     return res;
   }
 
