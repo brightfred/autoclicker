@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Overlay — drag a box on screen / show my targets on top of the game
   selectOnScreen:  (opts) => ipcRenderer.invoke('overlay-select', opts),
   showOnScreen:    (opts) => ipcRenderer.invoke('overlay-show', opts),
+  testMoveToTarget: (target) => ipcRenderer.invoke('target-test-move', { target }),
   getOverlayData:  ()     => ipcRenderer.invoke('overlay-get-data'),
   sendOverlayResult: (rect) => ipcRenderer.send('overlay-result', rect),
 

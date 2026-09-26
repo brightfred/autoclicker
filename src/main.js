@@ -12,6 +12,7 @@ import { getModel } from './models/index.js';
 import { startPath, stopPath } from './utils/mouseTracker.js';
 import { loadTargets, saveTargets, exportTargets, importTargets } from './utils/targetsFile.js';
 import { openOverlay } from './utils/overlay.js';
+import { createEngine } from './engine/index.js';
 
 if (started) app.quit();
 
@@ -28,6 +29,12 @@ let mousePaths      = [];     // collected between clicks (dart and future model
 let currentPath     = null;   // path being recorded right now
 
 let playing = false;
+let engine  = null;   // natural mouse movement engine, created on first use
+
+async function getEngine() {
+  if (!engine) engine = await createEngine();
+  return engine;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -257,6 +264,13 @@ ipcMain.handle('overlay-show', (_, { targets, highlightId }) => {
     preload: path.join(__dirname, 'preload.js'),
     loadRoute,
   });
+});
+
+// Move the mouse naturally onto a target (no click) so I can check how it feels.
+// For an inventory it goes to a random slot.
+ipcMain.handle('target-test-move', async (_, { target }) => {
+  const eng = await getEngine();
+  return eng.moveToTarget(target);
 });
 
 // ── Hotkey ────────────────────────────────────────────────────────────────────

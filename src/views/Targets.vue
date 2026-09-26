@@ -97,6 +97,7 @@
           </div>
 
           <div class="card-actions">
+            <button class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
             <button class="btn-icon" @click="locate(t)" title="Show on screen">◎</button>
             <button class="btn-icon" @click="redraw(t)" title="Redraw box">⬚</button>
             <button class="btn-icon" @click="openPrompt('rename-target', t)" title="Rename">✎</button>
@@ -223,6 +224,11 @@ async function redraw(target) {
   } finally {
     busy.value = false;
   }
+}
+
+// Glide the real mouse onto the target with the natural movement engine (no click)
+async function testMove(target) {
+  await window.electronAPI.testMoveToTarget(JSON.parse(JSON.stringify(target)));
 }
 
 function locate(target) {
