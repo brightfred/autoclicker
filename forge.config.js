@@ -4,14 +4,33 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 module.exports = {
   packagerConfig: {
     asar: true,
+    // The Vite plugin normally only copies the .vite build folder into the app.
+    // My native modules (uiohook-napi, @jitsi/robotjs) are "external" in
+    // vite.main.config.mjs, so they are not bundled — without this, the
+    // installed app crashes with "Cannot find module 'uiohook-napi'".
+    // Keeping /node_modules lets electron-packager copy my production
+    // dependencies (devDependencies are still pruned out).
+    // Return true = file is left out of the app, false = file is kept.
+    ignore: (file) => {
+      if (!file) return false;
+      const keep =
+        file.startsWith('/.vite') ||
+        file === '/package.json' ||
+        file.startsWith('/node_modules');
+      return !keep;
+    },
   },
   rebuildConfig: {
     onlyModules: ['uiohook-napi'],
   },
   makers: [
     {
+      // Windows installer (.exe) — this is the one my GitHub Action publishes
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        name: 'AlchClicker',
+        setupExe: 'AlchClicker-Setup.exe',
+      },
     },
     {
       name: '@electron-forge/maker-zip',
@@ -27,6 +46,12 @@ module.exports = {
     },
   ],
   plugins: [
+    {
+      // Pulls the native .node binaries out of app.asar, because Electron
+      // can't load a native module from inside an asar archive.
+      name: '@electron-forge/plugin-auto-unpack-natives',
+      config: {},
+    },
     {
       name: '@electron-forge/plugin-vite',
       config: {
