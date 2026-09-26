@@ -1,0 +1,66 @@
+# ── Release Workflow ──────────────────────────────────────────────────────────
+# Builds my Windows installer (AlchClicker-Setup.exe) and attaches it to a
+# GitHub Release so I can download and install it on any computer.
+#
+# Two ways to trigger it:
+#   1. Push a version tag:   git tag v1.0.1 && git push origin v1.0.1
+#   2. Manual button:        Actions tab → "Release" → "Run workflow"
+#      (uses the version in package.json, e.g. 1.0.0 → release v1.0.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# I need write access to create the release and upload the installer
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Figure out which version I'm releasing.
+      # On a tag push I use the tag (v1.2.3) and write it into package.json so
+      # the installer version matches. On a manual run I use package.json as is.
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $VERSION"
+
+      - name: Build Windows installer
+        run: npm run make -- --platform=win32 --arch=x64
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: AlchClicker v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: out/make/squirrel.windows/x64/AlchClicker-Setup.exe
+          fail_on_unmatched_files: true
