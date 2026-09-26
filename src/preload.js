@@ -16,6 +16,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onPlaybackStatus: (callback)       => ipcRenderer.on('playback-status', (_, status) => callback(status)),
   offPlaybackStatus: ()              => ipcRenderer.removeAllListeners('playback-status'),
 
+  // Targets (saved to targets.json)
+  loadTargets:   ()     => ipcRenderer.invoke('targets-load'),
+  saveTargets:   (data) => ipcRenderer.invoke('targets-save', data),
+  exportTargets: (data) => ipcRenderer.invoke('targets-export', data),
+  importTargets: ()     => ipcRenderer.invoke('targets-import'),
+
+  // Overlay — drag a box on screen / show my targets on top of the game
+  selectOnScreen:  (opts) => ipcRenderer.invoke('overlay-select', opts),
+  showOnScreen:    (opts) => ipcRenderer.invoke('overlay-show', opts),
+  getOverlayData:  ()     => ipcRenderer.invoke('overlay-get-data'),
+  sendOverlayResult: (rect) => ipcRenderer.send('overlay-result', rect),
+
   // Hotkey
   registerHotkey:   (key) => ipcRenderer.invoke('hotkey-register', key),
   unregisterHotkey: ()    => ipcRenderer.invoke('hotkey-unregister'),

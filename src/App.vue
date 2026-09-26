@@ -1,5 +1,8 @@
 <template>
-  <div class="app-shell">
+  <!-- Overlay windows only render the page itself, no app chrome -->
+  <router-view v-if="route.meta.bare" />
+
+  <div v-else class="app-shell">
 
     <!-- Titlebar -->
     <div class="titlebar">
@@ -24,6 +27,9 @@
         <router-link to="/record" class="nav-item" active-class="nav-active">
           <span>◉</span> Record
         </router-link>
+        <router-link to="/targets" class="nav-item" active-class="nav-active">
+          <span>⬚</span> Targets
+        </router-link>
       </nav>
 
       <!-- Main content -->
@@ -36,6 +42,10 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router';
+
+const route = useRoute();
+
 function minimize() { window.electronAPI?.minimize(); }
 function close() { window.electronAPI?.close(); }
 </script>

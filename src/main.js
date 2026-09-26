@@ -10,6 +10,8 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { getModel } from './models/index.js';
 import { startPath, stopPath } from './utils/mouseTracker.js';
+import { loadTargets, saveTargets, exportTargets, importTargets } from './utils/targetsFile.js';
+import { openOverlay } from './utils/overlay.js';
 
 if (started) app.quit();
 
@@ -50,6 +52,16 @@ function removeOutliers(events, threshold = 50) {
 
 // ── Window controls ───────────────────────────────────────────────────────────
 
+// Load my Vue app on a given hash route (e.g. '/overlay').
+// Works both in dev (Vite server) and in the packaged app.
+function loadRoute(win, route = '/') {
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    win.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#${route}`);
+  } else {
+    win.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), { hash: route });
+  }
+}
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -63,13 +75,10 @@ const createWindow = () => {
     },
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
-  }
+  loadRoute(mainWindow, '/');
 
-  mainWindow.webContents.openDevTools();
+  // DevTools only while developing (npm start), never in the installed app
+  if (!app.isPackaged) mainWindow.webContents.openDevTools();
 };
 
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
@@ -219,6 +228,35 @@ ipcMain.handle('playback-start', async (_, { pattern, config }) => {
 ipcMain.handle('playback-stop', () => {
   console.log(`[PLAYBACK] Stopped by user`);
   playing = false;
+});
+
+// ── Targets ───────────────────────────────────────────────────────────────────
+// Named screen areas (banker, tile, bank item, inventory...) grouped in setups.
+// Saved to targets.json in the app data folder — see utils/targetsFile.js
+
+ipcMain.handle('targets-load',   ()          => loadTargets());
+ipcMain.handle('targets-save',   (_, data)   => saveTargets(data));
+ipcMain.handle('targets-export', (_, data)   => exportTargets(mainWindow, data));
+ipcMain.handle('targets-import', ()          => importTargets(mainWindow));
+
+// Hide my window and let me drag a box on screen. Returns the rect or null.
+ipcMain.handle('overlay-select', (_, { kind, label, targets }) => {
+  return openOverlay({
+    mode: 'select', kind, label, targets,
+    mainWindow,
+    preload: path.join(__dirname, 'preload.js'),
+    loadRoute,
+  });
+});
+
+// Draw targets on top of the game so I can check they're in the right place
+ipcMain.handle('overlay-show', (_, { targets, highlightId }) => {
+  return openOverlay({
+    mode: 'show', targets, highlightId,
+    mainWindow,
+    preload: path.join(__dirname, 'preload.js'),
+    loadRoute,
+  });
 });
 
 // ── Hotkey ────────────────────────────────────────────────────────────────────
