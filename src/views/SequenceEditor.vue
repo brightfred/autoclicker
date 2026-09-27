@@ -167,7 +167,7 @@
               active: run.state === 'running' && run.stepId === step.id,
               dragging: dragFrom === i,
               invalid: !!stepIssue(step),
-              skipped: step.firstLoopOnly && run.state === 'running' && run.loop > 1,
+              skipped: run.state === 'running' && isSkipped(step, run.loop),
             }"
             :style="{ '--c': ACTION_TYPES[step.type]?.color }"
             :draggable="!busy && handleIndex === i"
@@ -242,18 +242,21 @@
                 </span>
               </template>
 
-              <span v-if="step.firstLoopOnly" class="first-badge" title="Skipped after the first loop">1st loop only</span>
+              <span v-if="loopMode(step) !== 'always'" class="first-badge" :title="LOOP_MODES[loopMode(step)].title">
+                {{ LOOP_MODES[loopMode(step)].badge }}
+              </span>
               <span v-if="stepIssue(step)" class="step-issue">⚠ {{ stepIssue(step) }}</span>
             </div>
 
             <div class="step-actions">
+              <!-- Cycles: every loop → 1st loop only → from loop 2 -->
               <button
                 class="btn-icon sm once"
-                :class="{ on: step.firstLoopOnly }"
+                :class="{ on: loopMode(step) !== 'always' }"
                 :disabled="busy"
-                title="Only do this on the first loop (e.g. withdraw a tinderbox)"
-                @click="step.firstLoopOnly = !step.firstLoopOnly"
-              >1×</button>
+                :title="`${LOOP_MODES[loopMode(step)].title} — click to change`"
+                @click="cycleLoopMode(step)"
+              >{{ LOOP_MODES[loopMode(step)].icon }}</button>
               <button class="btn-icon sm" :disabled="busy" @click="duplicateStep(i)" title="Duplicate">⧉</button>
               <button class="btn-icon sm btn-delete" :disabled="busy" @click="seq.actions.splice(i, 1)" title="Remove">✕</button>
             </div>
@@ -416,6 +419,33 @@ const loopEstimate = computed(() => {
   }, 0);
   return ms >= 60000 ? `${(ms / 60000).toFixed(1)} min` : `${(ms / 1000).toFixed(1)} s`;
 });
+
+// ── Loop modes ───────────────────────────────────────────────────────────────
+// Which loops a step runs on. Saved as two flags on the step so the engine
+// stays simple: firstLoopOnly (loop 1 only) / skipFirstLoop (loop 2 and after).
+
+const LOOP_MODES = {
+  always: { icon: '∞',  badge: '',              title: 'Runs on every loop' },
+  first:  { icon: '1×', badge: '1st loop only', title: 'Only on the first loop (e.g. withdraw a tinderbox)' },
+  rest:   { icon: '2+', badge: 'from loop 2',   title: 'Skipped on the first loop (e.g. deposit what the last loop made)' },
+};
+const LOOP_ORDER = ['always', 'first', 'rest'];
+
+function loopMode(step) {
+  if (step.firstLoopOnly) return 'first';
+  if (step.skipFirstLoop) return 'rest';
+  return 'always';
+}
+
+function cycleLoopMode(step) {
+  const next = LOOP_ORDER[(LOOP_ORDER.indexOf(loopMode(step)) + 1) % LOOP_ORDER.length];
+  step.firstLoopOnly = next === 'first';
+  step.skipFirstLoop = next === 'rest';
+}
+
+function isSkipped(step, loop) {
+  return (step.firstLoopOnly && loop > 1) || (step.skipFirstLoop && loop === 1);
+}
 
 function append(step) {
   seq.value.actions.push(step);

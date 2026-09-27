@@ -236,7 +236,7 @@ onMounted(guess);
 .wiz-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
 .wiz-sub   { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
 
-.preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 20px 12px; }
+.preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 20px 12px; }
 .preset-card {
   display: grid;
   grid-template-columns: 30px 1fr;

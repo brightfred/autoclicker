@@ -15,8 +15,9 @@
 import foresterCampfire from './foresterCampfire.js';
 import manualFiremaking from './manualFiremaking.js';
 import highAlch from './highAlch.js';
+import jugOfWine from './jugOfWine.js';
 
-export const PRESETS = [foresterCampfire, manualFiremaking, highAlch];
+export const PRESETS = [foresterCampfire, manualFiremaking, highAlch, jugOfWine];
 
 export function defaultOptions(preset) {
   return Object.fromEntries(preset.options.map(o => [o.id, structuredClone(o.default)]));
