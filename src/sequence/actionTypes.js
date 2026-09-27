@@ -22,8 +22,15 @@ export const ACTION_TYPES = {
       button: 'left',
     }),
   },
+  // Created from a minimap spot / tile dragged from the "Walk to" list
+  walk: {
+    label: 'Walk to',
+    icon:  '➜',
+    color: '#2dd4bf',
+    create: ({ targetId }) => ({ id: newStepId(), type: 'walk', targetId, minMs: 2500, maxMs: 4500 }),
+  },
   wait: {
-    label: 'Wait',
+    label: 'Pause',
     icon:  '◷',
     color: '#38bdf8',
     create: () => ({ id: newStepId(), type: 'wait', minMs: 600, maxMs: 1200 }),
@@ -33,6 +40,18 @@ export const ACTION_TYPES = {
     icon:  '⌨',
     color: '#a78bfa',
     create: () => ({ id: newStepId(), type: 'key', key: 'escape' }),
+  },
+  // Compass (north) + hold Up (top tilt) + scroll out (max zoom) = same view every time
+  camera: {
+    label: 'Reset camera',
+    icon:  '🧭',
+    color: '#f472b6',
+    create: () => ({
+      id: newStepId(), type: 'camera',
+      faceNorth: true, compassTargetId: null,
+      pitchUp: true,
+      zoomOut: true, viewTargetId: null,
+    }),
   },
   // A spot where a break is allowed — the efficiency slider decides if/how long
   breakpoint: {

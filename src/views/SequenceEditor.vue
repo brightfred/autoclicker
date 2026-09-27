@@ -101,174 +101,82 @@
 
     <div class="editor-body">
 
-      <!-- Palette: things I can drag into the sequence -->
-      <aside class="palette">
-        <div class="panel-title">Actions</div>
-        <div
-          v-for="type in ['wait', 'key', 'breakpoint']"
-          :key="type"
-          class="palette-item"
-          :class="{ locked: busy }"
-          :style="{ '--c': ACTION_TYPES[type].color }"
-          :draggable="!busy"
-          @dragstart="startPaletteDrag($event, () => ACTION_TYPES[type].create())"
-          @dragend="endDrag"
-          @click="!busy && append(ACTION_TYPES[type].create())"
-        >
-          <span class="p-icon">{{ ACTION_TYPES[type].icon }}</span>
-          <span class="p-name">{{ ACTION_TYPES[type].label }}</span>
-          <span class="p-add">+</span>
-        </div>
-
-        <div class="panel-title palette-gap">Click a target</div>
-        <div v-if="targets.length === 0" class="palette-empty">
-          This setup has no targets yet.<br />
-          <router-link to="/targets">Draw some in Targets →</router-link>
-        </div>
-        <div
-          v-for="t in targets"
-          :key="t.id"
-          class="palette-item"
-          :class="{ locked: busy }"
-          :style="{ '--c': getKind(t.kind).color }"
-          :draggable="!busy"
-          :title="getKind(t.kind).hint"
-          @dragstart="startPaletteDrag($event, () => ACTION_TYPES.click.create({ targetId: t.id, kind: t.kind }))"
-          @dragend="endDrag"
-          @click="!busy && append(ACTION_TYPES.click.create({ targetId: t.id, kind: t.kind }))"
-        >
-          <span class="p-icon">{{ getKind(t.kind).icon }}</span>
-          <span class="p-name">{{ t.name }}</span>
-          <span class="p-add">+</span>
-        </div>
-
-        <p class="palette-hint">Drag into the list, or click to add at the end.</p>
-      </aside>
-
-      <!-- The steps, in order -->
+      <!-- The flow: Start → steps (in order) → back to Start -->
       <section
-        class="steps"
-        :class="{ 'drag-over': dropIndex !== null }"
-        @dragover.prevent="onListDragOver"
+        class="canvas"
+        :class="{ dragging: dropIndex !== null }"
+        @dragover.prevent="onCanvasDragOver"
         @drop.prevent="onDrop"
       >
-        <div v-if="seq.actions.length === 0" class="steps-empty" :class="{ hot: dropIndex !== null }">
-          <div class="empty-icon">⇣</div>
-          <p class="empty-title">Drop steps here</p>
-          <p class="empty-sub">They run top to bottom, then loop back to the first one.</p>
-        </div>
-
-        <template v-for="(step, i) in seq.actions" :key="step.id">
-          <div v-if="dropIndex === i" class="drop-line" />
-
-          <div
-            class="step"
-            :class="{
-              active: run.state === 'running' && run.stepId === step.id,
-              dragging: dragFrom === i,
-              invalid: !!stepIssue(step),
-              skipped: run.state === 'running' && isSkipped(step, run.loop),
-            }"
-            :style="{ '--c': ACTION_TYPES[step.type]?.color }"
-            :draggable="!busy && handleIndex === i"
-            @dragstart="startRowDrag($event, i)"
-            @dragend="endDrag"
-            @dragover.prevent.stop="onRowDragOver($event, i)"
-          >
-            <span
-              class="handle"
-              :class="{ locked: busy }"
-              title="Drag to reorder"
-              @mousedown="handleIndex = i"
-              @mouseup="handleIndex = null"
-            >⋮⋮</span>
-            <span class="step-num">{{ i + 1 }}</span>
-            <span class="step-icon">{{ ACTION_TYPES[step.type]?.icon }}</span>
-
-            <div class="step-main">
-              <!-- Click -->
-              <template v-if="step.type === 'click'">
-                <span class="step-verb">Click</span>
-                <select v-model="step.targetId" class="select sm target" :title="targetById.get(step.targetId)?.name" :disabled="busy" @change="onTargetChange(step)">
-                  <option v-if="!targetById.get(step.targetId)" :value="step.targetId" disabled>— missing target —</option>
-                  <option v-for="t in targets" :key="t.id" :value="t.id">{{ getKind(t.kind).icon }} {{ t.name }}</option>
-                </select>
-                <template v-if="targetById.get(step.targetId)?.kind === 'inventory'">
-                  <span class="step-verb" title="Inventory slot">#</span>
-                  <select v-model.number="step.slot" class="select sm slot" :disabled="busy">
-                    <option v-for="n in SLOT_COUNT" :key="n" :value="n">{{ n }}</option>
-                  </select>
-                </template>
-                <!-- Compact left/right toggle so a whole click step fits on one line -->
-                <button
-                  class="btn-mouse"
-                  :class="{ right: step.button === 'right' }"
-                  :disabled="busy"
-                  :title="`${step.button === 'right' ? 'Right' : 'Left'} click — click to switch`"
-                  @click="step.button = step.button === 'right' ? 'left' : 'right'"
-                >{{ step.button === 'right' ? 'R' : 'L' }}</button>
-              </template>
-
-              <!-- Wait -->
-              <template v-else-if="step.type === 'wait'">
-                <span class="step-verb">Wait</span>
-                <input
-                  type="number" min="0" step="0.05" class="input num sm"
-                  :value="toSec(step.minMs)" :disabled="busy"
-                  @change="step.minMs = fromSec($event.target.value)"
-                />
-                <span class="step-verb">to</span>
-                <input
-                  type="number" min="0" step="0.05" class="input num sm"
-                  :value="toSec(step.maxMs)" :disabled="busy"
-                  @change="step.maxMs = fromSec($event.target.value)"
-                />
-                <span class="step-verb">sec</span>
-              </template>
-
-              <!-- Press key -->
-              <template v-else-if="step.type === 'key'">
-                <span class="step-verb">Press</span>
-                <select v-model="step.key" class="select sm" :disabled="busy">
-                  <option v-for="k in KEY_OPTIONS" :key="k.value" :value="k.value">{{ k.label }}</option>
-                </select>
-              </template>
-
-              <!-- Break point -->
-              <template v-else-if="step.type === 'breakpoint'">
-                <span class="step-verb">Break point</span>
-                <span class="step-note">
-                  {{ seq.efficiency >= 1 ? 'no breaks at 100% efficiency' : 'a break may happen here' }}
-                </span>
-              </template>
-
-              <span v-if="loopMode(step) !== 'always'" class="first-badge" :title="LOOP_MODES[loopMode(step)].title">
-                {{ LOOP_MODES[loopMode(step)].badge }}
-              </span>
-              <span v-if="stepIssue(step)" class="step-issue">⚠ {{ stepIssue(step) }}</span>
-            </div>
-
-            <div class="step-actions">
-              <!-- Cycles: every loop → 1st loop only → from loop 2 -->
-              <button
-                class="btn-icon sm once"
-                :class="{ on: loopMode(step) !== 'always' }"
-                :disabled="busy"
-                :title="`${LOOP_MODES[loopMode(step)].title} — click to change`"
-                @click="cycleLoopMode(step)"
-              >{{ LOOP_MODES[loopMode(step)].icon }}</button>
-              <button class="btn-icon sm" :disabled="busy" @click="duplicateStep(i)" title="Duplicate">⧉</button>
-              <button class="btn-icon sm btn-delete" :disabled="busy" @click="seq.actions.splice(i, 1)" title="Remove">✕</button>
-            </div>
+        <div class="flow">
+          <div class="terminal start">
+            <span class="terminal-icon">▶</span>
+            <span>Start</span>
+            <span class="terminal-sub">{{ seq.loops > 0 ? `${seq.loops} loop${seq.loops !== 1 ? 's' : ''}` : 'loops forever' }}</span>
           </div>
-        </template>
 
-        <div v-if="dropIndex !== null && dropIndex === seq.actions.length && seq.actions.length > 0" class="drop-line" />
+          <template v-for="(step, i) in seq.actions" :key="step.id">
+            <!-- Connector: a drop slot between two steps -->
+            <div class="link" :class="{ hot: dropIndex === i }" @dragover.prevent.stop="dropIndex = i">
+              <span class="link-plus">+</span>
+            </div>
 
-        <div v-if="seq.actions.length > 0" class="loop-marker">
-          ↻ {{ seq.loops > 0 ? `back to step 1 — ${seq.loops} loop${seq.loops !== 1 ? 's' : ''} total` : 'back to step 1, forever' }}
+            <FlowNode
+              :step="step"
+              :index="i"
+              :targets="targets"
+              :target-by-id="targetById"
+              :busy="busy"
+              :efficiency="seq.efficiency"
+              :active="run.state === 'running' && run.stepId === step.id"
+              :skipped="run.state === 'running' && isSkipped(step, run.loop)"
+              :class="{ moving: dragFrom === i }"
+              :draggable="!busy && handleIndex === i"
+              @dragstart="startNodeDrag($event, i)"
+              @dragend="endDrag"
+              @dragover.prevent.stop="onNodeDragOver($event, i)"
+              @grab="handleIndex = i"
+              @release="handleIndex = null"
+              @duplicate="duplicateStep(i)"
+              @remove="seq.actions.splice(i, 1)"
+            />
+          </template>
+
+          <!-- Last slot (or the big empty drop zone) -->
+          <div
+            v-if="seq.actions.length === 0"
+            class="drop-zone"
+            :class="{ hot: dropIndex === 0 }"
+            @dragover.prevent.stop="dropIndex = 0"
+          >
+            <span class="drop-icon">⇣</span>
+            <span class="drop-title">Drag an action here</span>
+            <span class="drop-sub">from the panel on the right — steps run top to bottom, then loop</span>
+          </div>
+          <div
+            v-else
+            class="link"
+            :class="{ hot: dropIndex === seq.actions.length }"
+            @dragover.prevent.stop="dropIndex = seq.actions.length"
+          >
+            <span class="link-plus">+</span>
+          </div>
+
+          <div class="terminal end">
+            <span class="terminal-icon">↻</span>
+            <span>{{ seq.loops === 1 ? 'Done' : 'Back to Start' }}</span>
+          </div>
         </div>
       </section>
+
+      <!-- Right panel: actions + targets to drag in -->
+      <ActionPalette
+        :targets="targets"
+        :busy="busy"
+        @drag-start="startPaletteDrag"
+        @drag-end="endDrag"
+        @add="append"
+      />
     </div>
 
     <transition name="fade">
@@ -286,15 +194,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useSequencesStore } from '../stores/sequences';
 import { useTargetsStore } from '../stores/targets';
-import { ACTION_TYPES, KEY_OPTIONS, cloneStep } from '../sequence/actionTypes.js';
-import { getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
+import { cloneStep } from '../sequence/actionTypes.js';
+import { isSkipped } from '../sequence/loopModes.js';
+import { stepDurationMs } from '../sequence/stepIssues.js';
+import FlowNode from '../components/flow/FlowNode.vue';
+import ActionPalette from '../components/flow/ActionPalette.vue';
 
-const SLOT_COUNT    = INV_COLS * INV_ROWS;
 const COUNTDOWN_SEC = 3;
 
 const route       = useRoute();
@@ -379,73 +289,16 @@ function showToast(text, type = 'ok') {
   toastTimer = setTimeout(() => (toast.value = null), 3200);
 }
 
-// Seconds with up to 2 decimals (0.25s must stay 0.25, not become 0.3)
-function toSec(ms) {
-  return Math.round(ms / 10) / 100;
-}
-
-function fromSec(value) {
-  return Math.max(0, Math.round(Number(value || 0) * 1000));
-}
-
 function setLoops(value) {
   const n = Math.round(Number(value));
   seq.value.loops = n >= 1 ? n : 1;
 }
 
-// Quick check shown on each step while editing (the engine does the real check on start)
-function stepIssue(step) {
-  if (step.type === 'click') {
-    const t = targetById.value.get(step.targetId);
-    if (!t) return 'target not in this setup';
-    if (t.kind === 'inventory' && !(step.slot >= 1 && step.slot <= SLOT_COUNT)) return 'pick a slot';
-  }
-  if (step.type === 'wait' && step.minMs > step.maxMs) return 'min is bigger than max';
-  return null;
-}
-
-// Switching a click to/from an inventory target needs a slot (or not)
-function onTargetChange(step) {
-  const t = targetById.value.get(step.targetId);
-  step.slot = t?.kind === 'inventory' ? (step.slot ?? 1) : null;
-}
-
-// Rough duration of one loop: middle of each wait + ~0.7s per click/key
+// Rough duration of one loop (middle of each wait + ~0.7s per click/key)
 const loopEstimate = computed(() => {
-  const ms = (seq.value?.actions ?? []).reduce((sum, s) => {
-    if (s.type === 'wait') return sum + (s.minMs + s.maxMs) / 2;
-    if (s.type === 'breakpoint') return sum; // breaks are counted by the efficiency slider
-    return sum + 700;
-  }, 0);
+  const ms = (seq.value?.actions ?? []).reduce((sum, step) => sum + stepDurationMs(step), 0);
   return ms >= 60000 ? `${(ms / 60000).toFixed(1)} min` : `${(ms / 1000).toFixed(1)} s`;
 });
-
-// ── Loop modes ───────────────────────────────────────────────────────────────
-// Which loops a step runs on. Saved as two flags on the step so the engine
-// stays simple: firstLoopOnly (loop 1 only) / skipFirstLoop (loop 2 and after).
-
-const LOOP_MODES = {
-  always: { icon: '∞',  badge: '',              title: 'Runs on every loop' },
-  first:  { icon: '1×', badge: '1st loop only', title: 'Only on the first loop (e.g. withdraw a tinderbox)' },
-  rest:   { icon: '2+', badge: 'from loop 2',   title: 'Skipped on the first loop (e.g. deposit what the last loop made)' },
-};
-const LOOP_ORDER = ['always', 'first', 'rest'];
-
-function loopMode(step) {
-  if (step.firstLoopOnly) return 'first';
-  if (step.skipFirstLoop) return 'rest';
-  return 'always';
-}
-
-function cycleLoopMode(step) {
-  const next = LOOP_ORDER[(LOOP_ORDER.indexOf(loopMode(step)) + 1) % LOOP_ORDER.length];
-  step.firstLoopOnly = next === 'first';
-  step.skipFirstLoop = next === 'rest';
-}
-
-function isSkipped(step, loop) {
-  return (step.firstLoopOnly && loop > 1) || (step.skipFirstLoop && loop === 1);
-}
 
 function append(step) {
   seq.value.actions.push(step);
@@ -457,11 +310,12 @@ function duplicateStep(i) {
 
 // ── Drag and drop ────────────────────────────────────────────────────────────
 // I keep what's being dragged in memory (the browser's dataTransfer can only be
-// read on drop). Palette items insert a new step; rows move an existing one.
+// read on drop). Palette cards insert a new step; nodes move an existing one.
+// dropIndex = the connector slot that lights up (0 = before the first step).
 
-const dropIndex   = ref(null);  // where the blue line is shown
-const dragFrom    = ref(null);  // index of the row being moved (null = from palette)
-const handleIndex = ref(null);  // row whose ⋮⋮ handle is held (only then it's draggable)
+const dropIndex   = ref(null);  // slot that's lit up
+const dragFrom    = ref(null);  // index of the node being moved (null = from palette)
+const handleIndex = ref(null);  // node whose ⋮⋮ handle is held (only then it's draggable)
 let makeStep      = null;       // creates the new step when dragging from the palette
 
 function startPaletteDrag(e, factory) {
@@ -471,22 +325,22 @@ function startPaletteDrag(e, factory) {
   e.dataTransfer.setData('text/plain', 'step');
 }
 
-function startRowDrag(e, index) {
+function startNodeDrag(e, index) {
   makeStep = null;
   dragFrom.value = index;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', 'step');
 }
 
-// Above the middle of a row → insert before it, below → after it
-function onRowDragOver(e, index) {
+// Over a node: top half → slot above it, bottom half → slot below it
+function onNodeDragOver(e, index) {
   const box = e.currentTarget.getBoundingClientRect();
   dropIndex.value = e.clientY < box.top + box.height / 2 ? index : index + 1;
 }
 
-// Empty space under the last row → drop at the end
-function onListDragOver(e) {
-  if (e.target === e.currentTarget || seq.value.actions.length === 0) {
+// Empty canvas space → drop at the end
+function onCanvasDragOver(e) {
+  if (!e.target.closest('.node, .link, .drop-zone')) {
     dropIndex.value = seq.value.actions.length;
   }
 }
@@ -580,6 +434,13 @@ function onStatus(status) {
     else showToast(status.stopped ? 'Stopped' : 'Finished all loops');
   }
 }
+
+// Keep the running step on screen in long flows (e.g. 27 logs = 80+ steps)
+watch(() => run.stepId, async (id) => {
+  if (!id) return;
+  await nextTick();
+  document.querySelector('.canvas .node.active')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
 
 // F6 when idle → start countdown, during countdown → cancel.
 // (While running, main stops it directly on F6.)
@@ -727,6 +588,18 @@ onBeforeUnmount(() => {
 .eff-hint  { font-size: 12px; color: var(--color-muted); }
 .stat.accent { color: var(--color-accent); border-color: #7c4f0a; }
 .step.skipped { opacity: 0.4; }
+.chip {
+  height: 26px;
+  padding: 0 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip.on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, var(--color-surface)); }
+.chip:disabled { opacity: 0.5; cursor: default; }
 .first-badge {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -755,127 +628,95 @@ onBeforeUnmount(() => {
 /* ── Body ── */
 .editor-body { flex: 1; display: flex; gap: 12px; min-height: 0; }
 
-.palette {
-  width: 190px;
-  flex-shrink: 0;
+/* The canvas: dotted background like a flow builder */
+.canvas {
+  flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  background: var(--color-surface);
+  padding: 20px 16px 40px;
   border: 1px solid var(--color-border);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  background-color: var(--color-bg);
+  background-image: radial-gradient(circle, #1a2130 1px, transparent 1.2px);
+  background-size: 18px 18px;
 }
-.palette-gap { margin-top: 10px; }
-.palette-item {
+.flow { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; }
+
+.terminal {
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  background: var(--color-panel);
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   border: 1px solid var(--color-border);
-  border-left: 3px solid var(--c);
-  cursor: grab;
-  transition: all 0.15s;
+  background: var(--color-surface);
 }
-.palette-item:hover:not(.locked) { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, var(--color-panel)); }
-.palette-item:active:not(.locked) { cursor: grabbing; }
-.palette-item.locked { opacity: 0.4; cursor: default; }
-.p-icon { color: var(--c); width: 20px; flex-shrink: 0; text-align: center; font-size: 13px; }
-.p-name { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p-add  { color: var(--color-muted); font-size: 14px; }
-.palette-empty { font-size: 12px; color: var(--color-muted); line-height: 1.5; }
-.palette-empty a, .palette-hint a { color: var(--color-accent); }
-.palette-hint { margin-top: auto; padding-top: 10px; font-size: 11px; color: var(--color-muted); line-height: 1.4; }
+.terminal.start { color: var(--color-green); border-color: rgba(34, 197, 94, 0.5); }
+.terminal.end   { color: var(--color-muted); }
+.terminal-icon { font-size: 12px; }
+.terminal-sub { font-family: var(--font-mono); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--color-muted); }
 
-/* ── Steps ── */
-.steps {
-  flex: 1;
-  overflow-y: auto;
+/* Connector between steps — a vertical line with a + that lights up on drag */
+.link {
+  position: relative;
+  height: 26px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px 4px 24px;
-  min-width: 0;
-}
-.steps-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border: 1px dashed var(--color-border);
-  color: var(--color-muted);
-  transition: all 0.15s;
+  transition: height 0.15s;
 }
-.steps-empty.hot { border-color: var(--color-accent); background: rgba(245, 166, 35, 0.05); }
-
-.step {
+.link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--color-border);
+}
+.link-plus {
+  position: relative;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--color-panel);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--c);
-  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
-}
-.step:hover { border-color: #2e3850; border-left-color: var(--c); }
-.step.dragging { opacity: 0.35; }
-.step.invalid { border-color: rgba(239, 68, 68, 0.5); border-left-color: var(--color-red); }
-.step.active {
-  border-color: var(--color-green);
-  border-left-color: var(--color-green);
-  background: color-mix(in srgb, var(--color-green) 10%, var(--color-panel));
-  box-shadow: 0 0 0 1px var(--color-green);
-}
-
-.handle { color: var(--color-muted); cursor: grab; letter-spacing: -2px; padding: 0 2px; }
-.handle:hover:not(.locked) { color: var(--color-text); }
-.handle.locked { opacity: 0.3; cursor: default; }
-.step-num { font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); width: 20px; text-align: right; }
-.step-icon { color: var(--c); width: 20px; flex-shrink: 0; text-align: center; font-size: 14px; }
-.step-main { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.step-verb { font-size: 12px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.step-issue { font-size: 12px; color: var(--color-red); font-weight: 600; }
-.step-actions { display: flex; gap: 4px; }
-
-.select.sm, .input.sm { padding: 4px 8px; font-size: 13px; }
-.select.sm { max-width: 150px; }
-.select.slot { width: 54px; }
-.select.target { width: 132px; }
-.btn-mouse {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-muted);
-  font-family: var(--font-mono);
+  justify-content: center;
+  border-radius: 50%;
   font-size: 12px;
-  cursor: pointer;
+  line-height: 1;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  opacity: 0;
   transition: all 0.15s;
 }
-.btn-mouse:hover:not(:disabled) { border-color: var(--color-text); color: var(--color-text); }
-.btn-mouse.right { color: var(--color-accent); border-color: var(--color-accent); }
-.input.num.sm { width: 64px; }
-.btn-icon.sm { width: 26px; height: 26px; font-size: 11px; }
+.canvas.dragging .link { height: 34px; }
+.canvas.dragging .link-plus { opacity: 1; }
+.link.hot::before { background: var(--color-accent); box-shadow: 0 0 6px var(--color-accent); }
+.link.hot .link-plus { opacity: 1; width: 24px; height: 24px; color: #0a0c0f; background: var(--color-accent); border-color: var(--color-accent); }
 
-.drop-line {
-  height: 2px;
-  background: var(--color-accent);
-  box-shadow: 0 0 6px var(--color-accent);
-  margin: -1px 0;
-}
+.moving { opacity: 0.35; }
 
-.loop-marker {
-  margin-top: 4px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
+/* Empty flow */
+.drop-zone {
+  margin: 14px 0;
+  padding: 34px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 2px dashed var(--color-border);
   color: var(--color-muted);
-  border: 1px dashed var(--color-border);
-  text-align: center;
+  background: rgba(17, 19, 24, 0.6);
+  transition: all 0.15s;
 }
+.drop-zone.hot { border-color: var(--color-accent); background: rgba(245, 166, 35, 0.06); color: var(--color-text); }
+.drop-icon  { font-size: 26px; }
+.drop-title { font-size: 15px; font-weight: 700; color: var(--color-text); }
+.drop-sub   { font-size: 12px; }
 </style>

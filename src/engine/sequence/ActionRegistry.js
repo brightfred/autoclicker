@@ -8,6 +8,8 @@ import { ClickAction } from './actions/ClickAction.js';
 import { WaitAction } from './actions/WaitAction.js';
 import { KeyAction } from './actions/KeyAction.js';
 import { BreakPointAction } from './actions/BreakPointAction.js';
+import { CameraAction } from './actions/CameraAction.js';
+import { WalkAction } from './actions/WalkAction.js';
 
 export class ActionRegistry {
   #types = new Map();
@@ -29,5 +31,7 @@ export function createDefaultRegistry() {
     .register('click', ClickAction)
     .register('wait',  WaitAction)
     .register('key',   KeyAction)
-    .register('breakpoint', BreakPointAction);
+    .register('breakpoint', BreakPointAction)
+    .register('camera', CameraAction)
+    .register('walk', WalkAction);
 }

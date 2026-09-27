@@ -18,6 +18,7 @@
         <span>Drag a box over <strong>{{ data.label || kind.label }}</strong></span>
         <span v-if="data.kind === 'inventory'" class="banner-hint">cover all 28 slots, edge to edge</span>
         <span v-else-if="data.kind === 'tile'" class="banner-hint">one tile, zoomed out fully</span>
+        <span v-else-if="data.kind === 'minimap'" class="banner-hint">keep it small — one minimap tile is ~4px</span>
         <span class="banner-keys"><kbd>Esc</kbd> or right-click to cancel</span>
       </template>
       <template v-else>

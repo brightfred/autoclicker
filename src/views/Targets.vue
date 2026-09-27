@@ -164,6 +164,7 @@ const PLACEHOLDERS = {
   tile:      'Fire tile',
   item:      'Bank: Logs',
   inventory: 'Inventory',
+  minimap:   'Minimap: back to bank',
 };
 
 function placeholderFor(kindId) {
@@ -323,7 +324,7 @@ onMounted(() => {
 
 .kind-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
 }
 .kind-card {
