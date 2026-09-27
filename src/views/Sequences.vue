@@ -10,6 +10,7 @@
       <div class="header-actions">
         <button class="btn-ghost" @click="doImport" title="Import sequences from a .json file">⤒ Import</button>
         <button class="btn-ghost" :disabled="sequences.length === 0" @click="doExport" title="Export all sequences">⤓ Export</button>
+        <button class="btn-ghost" @click="showPresets = true">✦ From preset</button>
         <button class="btn-primary" @click="openNew">+ New sequence</button>
       </div>
     </div>
@@ -34,7 +35,10 @@
           </div>
         </div>
       </div>
-      <button class="btn-primary" @click="openNew">+ New sequence</button>
+      <div class="start-buttons">
+        <button class="btn-ghost" @click="showPresets = true">✦ From preset</button>
+        <button class="btn-primary" @click="openNew">+ New sequence</button>
+      </div>
     </div>
 
     <!-- Sequence list -->
@@ -84,6 +88,9 @@
       </form>
     </div>
 
+    <!-- Build from a preset (Forester's campfire, manual firemaking...) -->
+    <PresetWizard v-if="showPresets" @close="showPresets = false" @created="onPresetCreated" />
+
     <!-- Delete confirmation -->
     <div v-if="toDelete" class="modal-backdrop" @click.self="toDelete = null">
       <div class="modal">
@@ -109,6 +116,7 @@ import { storeToRefs } from 'pinia';
 import { useSequencesStore } from '../stores/sequences';
 import { useTargetsStore } from '../stores/targets';
 import { ACTION_TYPES, keyLabel } from '../sequence/actionTypes.js';
+import PresetWizard from '../components/PresetWizard.vue';
 
 const router      = useRouter();
 const seqStore    = useSequencesStore();
@@ -119,6 +127,7 @@ const { setups }    = storeToRefs(targetStore);
 const creating  = ref(null);   // { name, setupId } while the "new" modal is open
 const nameInput = ref(null);
 const toDelete  = ref(null);
+const showPresets = ref(false);
 const toast     = ref(null);
 let toastTimer  = null;
 
@@ -146,6 +155,7 @@ function preview(seq) {
       return t.kind === 'inventory' ? `${t.name} #${step.slot}` : t.name;
     }
     if (step.type === 'key') return keyLabel(step.key);
+    if (step.type === 'breakpoint') return '☕';
     return ACTION_TYPES[step.type]?.label ?? step.type;
   });
   if (names.length === 0) return 'empty';
@@ -161,6 +171,11 @@ async function openNew() {
 function create() {
   const seq = seqStore.addSequence({ name: creating.value.name.trim(), setupId: creating.value.setupId });
   creating.value = null;
+  edit(seq);
+}
+
+function onPresetCreated(seq) {
+  showPresets.value = false;
   edit(seq);
 }
 
@@ -221,6 +236,8 @@ onMounted(() => {
 .how-title { font-weight: 700; color: var(--color-text); font-size: 14px; }
 .how-sub   { font-size: 12px; line-height: 1.4; margin-top: 2px; }
 .how-sub a { color: var(--color-accent); }
+
+.start-buttons { display: flex; gap: 8px; }
 
 .seq-list { display: flex; flex-direction: column; gap: 6px; }
 .seq-card {

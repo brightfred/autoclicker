@@ -167,6 +167,7 @@
               active: run.state === 'running' && run.stepId === step.id,
               dragging: dragFrom === i,
               invalid: !!stepIssue(step),
+              skipped: step.firstLoopOnly && run.state === 'running' && run.loop > 1,
             }"
             :style="{ '--c': ACTION_TYPES[step.type]?.color }"
             :draggable="!busy && handleIndex === i"
@@ -241,10 +242,18 @@
                 </span>
               </template>
 
+              <span v-if="step.firstLoopOnly" class="first-badge" title="Skipped after the first loop">1st loop only</span>
               <span v-if="stepIssue(step)" class="step-issue">⚠ {{ stepIssue(step) }}</span>
             </div>
 
             <div class="step-actions">
+              <button
+                class="btn-icon sm once"
+                :class="{ on: step.firstLoopOnly }"
+                :disabled="busy"
+                title="Only do this on the first loop (e.g. withdraw a tinderbox)"
+                @click="step.firstLoopOnly = !step.firstLoopOnly"
+              >1×</button>
               <button class="btn-icon sm" :disabled="busy" @click="duplicateStep(i)" title="Duplicate">⧉</button>
               <button class="btn-icon sm btn-delete" :disabled="busy" @click="seq.actions.splice(i, 1)" title="Remove">✕</button>
             </div>
@@ -685,6 +694,18 @@ onBeforeUnmount(() => {
 .eff-mood  { font-size: 12px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.08em; width: 84px; }
 .eff-hint  { font-size: 12px; color: var(--color-muted); }
 .stat.accent { color: var(--color-accent); border-color: #7c4f0a; }
+.step.skipped { opacity: 0.4; }
+.first-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  border: 1px dashed var(--color-accent);
+  padding: 1px 5px;
+}
+.btn-icon.once { font-family: var(--font-mono); font-size: 10px; }
+.btn-icon.once.on { color: var(--color-accent); border-color: var(--color-accent); background: rgba(245, 166, 35, 0.1); }
 .step-note { font-size: 12px; color: var(--color-muted); font-style: italic; }
 
 /* ── Problems ── */

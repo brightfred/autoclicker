@@ -50,10 +50,14 @@ export const useSequencesStore = defineStore('sequences', () => {
     return sequences.value.find(s => s.id === id);
   }
 
-  function addSequence({ name, setupId }) {
+  // Empty by default; presets pass their steps + efficiency/profile
+  function addSequence({
+    name, setupId, actions = [], loops = 0,
+    efficiency = DEFAULT_EFFICIENCY, breakProfile = DEFAULT_PROFILE_ID,
+  }) {
     const seq = {
-      id: newId(), name, setupId, loops: 0, actions: [],
-      efficiency: DEFAULT_EFFICIENCY, breakProfile: DEFAULT_PROFILE_ID,
+      id: newId(), name, setupId, loops, actions,
+      efficiency, breakProfile,
       createdAt: new Date().toISOString(),
     };
     sequences.value.push(seq);

@@ -6,6 +6,8 @@
 // Breaks only happen at break points: every "Break point" step, or — if the
 // sequence has none — at the end of each loop.
 //
+// Any step can be marked firstLoopOnly (e.g. withdraw a tinderbox once).
+//
 // Status updates go out through onStatus() so the UI can highlight the
 // current step — the runner itself knows nothing about windows or IPC.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,6 +96,9 @@ export class SequenceRunner {
     try {
       for (let loop = 1; loop <= loops && !ctx.shouldStop(); loop++) {
         for (let step = 0; step < actions.length && !ctx.shouldStop(); step++) {
+          // Steps like "withdraw a tinderbox" only need to happen on the first loop
+          if (sequence.actions[step].firstLoopOnly && loop > 1) continue;
+
           this.#position = { loop, loops: sequence.loops, step, stepId: sequence.actions[step].id };
           this.#emit(clock);
           await actions[step].execute(ctx);
