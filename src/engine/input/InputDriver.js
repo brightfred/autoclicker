@@ -20,6 +20,13 @@ export class InputDriver {
   // eslint-disable-next-line no-unused-vars
   mouseUp(button = 'left') { this.#missing('mouseUp'); }
 
+  /**
+   * Turn the mouse wheel by whole notches at the current position.
+   * Negative = toward me (scroll down), positive = away (scroll up).
+   */
+  // eslint-disable-next-line no-unused-vars
+  scroll(notches) { this.#missing('scroll'); }
+
   /** Press a key down (no release), e.g. 'escape', 'space', '1' */
   // eslint-disable-next-line no-unused-vars
   keyDown(key) { this.#missing('keyDown'); }

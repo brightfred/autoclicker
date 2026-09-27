@@ -53,6 +53,34 @@ export class Engine {
     this.driver.mouseUp(button);
   }
 
+  /** Hold a key down for a while (e.g. arrow key to tilt the camera) — stoppable */
+  async holdKey(key, ms, { shouldStop = () => false } = {}) {
+    this.driver.keyDown(key);
+    const end = Date.now() + ms;
+    while (Date.now() < end && !shouldStop()) {
+      await sleep(Math.min(50, end - Date.now()));
+    }
+    this.driver.keyUp(key);
+  }
+
+  /**
+   * Scroll the wheel like a finger does: a few quick flicks of 2–5 notches
+   * with short pauses, instead of one inhuman burst.
+   */
+  async scroll(notches, { shouldStop = () => false } = {}) {
+    const direction = Math.sign(notches);
+    let left = Math.abs(notches);
+    while (left > 0 && !shouldStop()) {
+      const flick = Math.min(left, 2 + Math.floor(Math.random() * 4));
+      for (let i = 0; i < flick; i++) {
+        this.driver.scroll(direction);
+        await sleep(randBetween([18, 45]));
+      }
+      left -= flick;
+      await sleep(randBetween([90, 260]));
+    }
+  }
+
   /** Tap a key, holding it a human-like moment */
   async pressKey(key) {
     this.driver.keyDown(key);

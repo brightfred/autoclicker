@@ -156,6 +156,7 @@ function preview(seq) {
     }
     if (step.type === 'key') return keyLabel(step.key);
     if (step.type === 'breakpoint') return '☕';
+    if (step.type === 'camera') return '🧭';
     return ACTION_TYPES[step.type]?.label ?? step.type;
   });
   if (names.length === 0) return 'empty';

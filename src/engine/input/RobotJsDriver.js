@@ -4,6 +4,9 @@
 
 import { InputDriver } from './InputDriver.js';
 
+// Windows sends the raw wheel value (one notch = 120), Linux/X11 counts notches
+const WHEEL_UNIT = process.platform === 'win32' ? 120 : 1;
+
 export class RobotJsDriver extends InputDriver {
   constructor(robot) {
     super();
@@ -29,6 +32,10 @@ export class RobotJsDriver extends InputDriver {
 
   mouseUp(button = 'left') {
     this.robot.mouseToggle('up', button);
+  }
+
+  scroll(notches) {
+    this.robot.scrollMouse(0, Math.round(notches) * WHEEL_UNIT);
   }
 
   keyDown(key) {

@@ -34,6 +34,18 @@ export const ACTION_TYPES = {
     color: '#a78bfa',
     create: () => ({ id: newStepId(), type: 'key', key: 'escape' }),
   },
+  // Compass (north) + hold Up (top tilt) + scroll out (max zoom) = same view every time
+  camera: {
+    label: 'Reset camera',
+    icon:  '🧭',
+    color: '#f472b6',
+    create: () => ({
+      id: newStepId(), type: 'camera',
+      faceNorth: true, compassTargetId: null,
+      pitchUp: true,
+      zoomOut: true, viewTargetId: null,
+    }),
+  },
   // A spot where a break is allowed — the efficiency slider decides if/how long
   breakpoint: {
     label: 'Break point',

@@ -105,7 +105,7 @@
       <aside class="palette">
         <div class="panel-title">Actions</div>
         <div
-          v-for="type in ['wait', 'key', 'breakpoint']"
+          v-for="type in ['wait', 'key', 'breakpoint', 'camera']"
           :key="type"
           class="palette-item"
           :class="{ locked: busy }"
@@ -231,6 +231,22 @@
                 <span class="step-verb">Press</span>
                 <select v-model="step.key" class="select sm" :disabled="busy">
                   <option v-for="k in KEY_OPTIONS" :key="k.value" :value="k.value">{{ k.label }}</option>
+                </select>
+              </template>
+
+              <!-- Reset camera: each part can be switched on/off -->
+              <template v-else-if="step.type === 'camera'">
+                <span class="step-verb">Camera</span>
+                <button class="chip" :class="{ on: step.faceNorth }" :disabled="busy" title="Click the compass → face north" @click="step.faceNorth = !step.faceNorth">N</button>
+                <select v-if="step.faceNorth" v-model="step.compassTargetId" class="select sm target" title="Compass target" :disabled="busy">
+                  <option :value="null" disabled>— compass —</option>
+                  <option v-for="t in targets" :key="t.id" :value="t.id">{{ getKind(t.kind).icon }} {{ t.name }}</option>
+                </select>
+                <button class="chip" :class="{ on: step.pitchUp }" :disabled="busy" title="Hold the Up arrow → camera tilts to the top" @click="step.pitchUp = !step.pitchUp">Tilt</button>
+                <button class="chip" :class="{ on: step.zoomOut }" :disabled="busy" title="Scroll out over the game view → max zoom out" @click="step.zoomOut = !step.zoomOut">Zoom</button>
+                <select v-if="step.zoomOut" v-model="step.viewTargetId" class="select sm target" title="Where to scroll (any spot in the game view)" :disabled="busy">
+                  <option :value="null" disabled>— scroll over —</option>
+                  <option v-for="t in targets" :key="t.id" :value="t.id">{{ getKind(t.kind).icon }} {{ t.name }}</option>
                 </select>
               </template>
 
@@ -401,6 +417,11 @@ function stepIssue(step) {
     if (t.kind === 'inventory' && !(step.slot >= 1 && step.slot <= SLOT_COUNT)) return 'pick a slot';
   }
   if (step.type === 'wait' && step.minMs > step.maxMs) return 'min is bigger than max';
+  if (step.type === 'camera') {
+    if (!step.faceNorth && !step.pitchUp && !step.zoomOut) return 'turn on N, Tilt or Zoom';
+    if (step.faceNorth && !targetById.value.get(step.compassTargetId)) return 'pick the compass';
+    if (step.zoomOut && !targetById.value.get(step.viewTargetId)) return 'pick where to scroll';
+  }
   return null;
 }
 
@@ -415,6 +436,7 @@ const loopEstimate = computed(() => {
   const ms = (seq.value?.actions ?? []).reduce((sum, s) => {
     if (s.type === 'wait') return sum + (s.minMs + s.maxMs) / 2;
     if (s.type === 'breakpoint') return sum; // breaks are counted by the efficiency slider
+    if (s.type === 'camera') return sum + 4000;
     return sum + 700;
   }, 0);
   return ms >= 60000 ? `${(ms / 60000).toFixed(1)} min` : `${(ms / 1000).toFixed(1)} s`;
@@ -727,6 +749,18 @@ onBeforeUnmount(() => {
 .eff-hint  { font-size: 12px; color: var(--color-muted); }
 .stat.accent { color: var(--color-accent); border-color: #7c4f0a; }
 .step.skipped { opacity: 0.4; }
+.chip {
+  height: 26px;
+  padding: 0 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip.on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, var(--color-surface)); }
+.chip:disabled { opacity: 0.5; cursor: default; }
 .first-badge {
   font-family: var(--font-mono);
   font-size: 10px;
