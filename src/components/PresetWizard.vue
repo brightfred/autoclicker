@@ -45,7 +45,7 @@
         <!-- 3. Options first — they decide which targets are needed -->
         <section class="wiz-section">
           <div class="panel-title">Options</div>
-          <div v-for="opt in preset.options" :key="opt.id" class="opt-row">
+          <div v-for="opt in visibleOptions" :key="opt.id" class="opt-row">
             <span class="opt-label">
               {{ opt.label }}
               <span v-if="opt.hint" class="opt-hint">{{ opt.hint }}</span>
@@ -67,6 +67,13 @@
             <select v-else-if="opt.type === 'slot'" v-model.number="options[opt.id]" class="select sm">
               <option v-for="n in SLOT_COUNT" :key="n" :value="n">Slot {{ n }}</option>
             </select>
+
+            <input
+              v-else-if="opt.type === 'number'"
+              type="number" :min="opt.min ?? 0" step="1"
+              class="input num sm"
+              v-model.number="options[opt.id]"
+            />
 
             <div v-else-if="opt.type === 'range'" class="range">
               <input type="number" min="0" step="0.1" class="input num sm" v-model.number="options[opt.id][0]" />
@@ -108,6 +115,7 @@
           </template>
           <template v-else>
             <span class="stat">{{ builtSteps.length }} steps</span>
+            <span class="stat">{{ loops > 0 ? `${loops} loops` : 'loops forever' }}</span>
             <span class="stat">☕ {{ Math.round(preset.efficiency * 100) }}% · {{ preset.breakProfile }}</span>
           </template>
         </div>
@@ -123,7 +131,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useTargetsStore } from '../stores/targets';
 import { useSequencesStore } from '../stores/sequences';
-import { PRESETS, defaultOptions, activeRoles, guessRoles } from '../sequence/presets/index.js';
+import { PRESETS, defaultOptions, activeRoles, activeOptions, guessRoles } from '../sequence/presets/index.js';
 import { getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 
 const SLOT_COUNT = INV_COLS * INV_ROWS;
@@ -143,12 +151,22 @@ const setup   = computed(() => setups.value.find(s => s.id === setupId.value));
 const targets = computed(() => setup.value?.targets ?? []);
 const roles   = computed(() => activeRoles(preset.value, options));
 
+// The target picked for each role (null if none yet)
+const roleTargets = computed(() => {
+  const byId = new Map(targets.value.map(t => [t.id, t]));
+  return Object.fromEntries(roles.value.map(r => [r.id, byId.get(picks[r.id]) ?? null]));
+});
+
+// Options that apply right now (e.g. the slot only when the item is the Inventory)
+const visibleOptions = computed(() => activeOptions(preset.value, options, roleTargets.value));
+
 // Required roles I haven't connected yet
 const missing = computed(() => roles.value.filter(r => !r.optional && !picks[r.id]));
 
 // Simple sanity checks on the ranges
 const problem = computed(() => {
-  for (const opt of preset.value.options) {
+  for (const opt of visibleOptions.value) {
+    if (opt.type === 'number' && !(options[opt.id] >= (opt.min ?? 0))) return `${opt.label}: enter a number`;
     if (opt.type !== 'range') continue;
     const [min, max] = options[opt.id];
     if (!(min >= 0) || !(max >= 0)) return `${opt.label}: enter both numbers`;
@@ -160,10 +178,10 @@ const problem = computed(() => {
 // Build the steps live, so the preview always matches what I'll get
 const builtSteps = computed(() => {
   if (missing.value.length || problem.value) return [];
-  const byId = new Map(targets.value.map(t => [t.id, t]));
-  const resolved = Object.fromEntries(roles.value.map(r => [r.id, byId.get(picks[r.id]) ?? null]));
-  return preset.value.build({ roles: resolved, options });
+  return preset.value.build({ roles: roleTargets.value, options });
 });
+
+const loops = computed(() => preset.value.loops?.(options) ?? 0);
 
 const canCreate = computed(() => name.value.trim() && setupId.value && builtSteps.value.length > 0);
 
@@ -190,6 +208,7 @@ function create() {
     name: name.value.trim(),
     setupId: setupId.value,
     actions: builtSteps.value,
+    loops: loops.value,
     efficiency: preset.value.efficiency,
     breakProfile: preset.value.breakProfile,
   });
@@ -217,7 +236,7 @@ onMounted(guess);
 .wiz-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
 .wiz-sub   { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
 
-.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 20px 12px; }
+.preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 20px 12px; }
 .preset-card {
   display: grid;
   grid-template-columns: 30px 1fr;

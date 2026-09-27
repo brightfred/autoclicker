@@ -189,12 +189,12 @@
               <!-- Click -->
               <template v-if="step.type === 'click'">
                 <span class="step-verb">Click</span>
-                <select v-model="step.targetId" class="select sm" :disabled="busy" @change="onTargetChange(step)">
+                <select v-model="step.targetId" class="select sm target" :title="targetById.get(step.targetId)?.name" :disabled="busy" @change="onTargetChange(step)">
                   <option v-if="!targetById.get(step.targetId)" :value="step.targetId" disabled>— missing target —</option>
                   <option v-for="t in targets" :key="t.id" :value="t.id">{{ getKind(t.kind).icon }} {{ t.name }}</option>
                 </select>
                 <template v-if="targetById.get(step.targetId)?.kind === 'inventory'">
-                  <span class="step-verb">slot</span>
+                  <span class="step-verb" title="Inventory slot">#</span>
                   <select v-model.number="step.slot" class="select sm slot" :disabled="busy">
                     <option v-for="n in SLOT_COUNT" :key="n" :value="n">{{ n }}</option>
                   </select>
@@ -213,13 +213,13 @@
               <template v-else-if="step.type === 'wait'">
                 <span class="step-verb">Wait</span>
                 <input
-                  type="number" min="0" step="0.1" class="input num sm"
+                  type="number" min="0" step="0.05" class="input num sm"
                   :value="toSec(step.minMs)" :disabled="busy"
                   @change="step.minMs = fromSec($event.target.value)"
                 />
                 <span class="step-verb">to</span>
                 <input
-                  type="number" min="0" step="0.1" class="input num sm"
+                  type="number" min="0" step="0.05" class="input num sm"
                   :value="toSec(step.maxMs)" :disabled="busy"
                   @change="step.maxMs = fromSec($event.target.value)"
                 />
@@ -376,8 +376,9 @@ function showToast(text, type = 'ok') {
   toastTimer = setTimeout(() => (toast.value = null), 3200);
 }
 
+// Seconds with up to 2 decimals (0.25s must stay 0.25, not become 0.3)
 function toSec(ms) {
-  return Math.round(ms / 100) / 10;
+  return Math.round(ms / 10) / 100;
 }
 
 function fromSec(value) {
@@ -410,6 +411,7 @@ function onTargetChange(step) {
 const loopEstimate = computed(() => {
   const ms = (seq.value?.actions ?? []).reduce((sum, s) => {
     if (s.type === 'wait') return sum + (s.minMs + s.maxMs) / 2;
+    if (s.type === 'breakpoint') return sum; // breaks are counted by the efficiency slider
     return sum + 700;
   }, 0);
   return ms >= 60000 ? `${(ms / 60000).toFixed(1)} min` : `${(ms / 1000).toFixed(1)} s`;
@@ -724,7 +726,7 @@ onBeforeUnmount(() => {
 .editor-body { flex: 1; display: flex; gap: 12px; min-height: 0; }
 
 .palette {
-  width: 210px;
+  width: 190px;
   flex-shrink: 0;
   overflow-y: auto;
   background: var(--color-surface);
@@ -810,8 +812,9 @@ onBeforeUnmount(() => {
 .step-actions { display: flex; gap: 4px; }
 
 .select.sm, .input.sm { padding: 4px 8px; font-size: 13px; }
-.select.sm { max-width: 160px; }
-.select.slot { width: 58px; }
+.select.sm { max-width: 150px; }
+.select.slot { width: 54px; }
+.select.target { width: 132px; }
 .btn-mouse {
   width: 28px;
   height: 28px;

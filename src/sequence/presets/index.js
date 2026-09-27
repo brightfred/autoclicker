@@ -6,14 +6,17 @@
 // A preset has:
 //   roles   - targets it needs ({ id, label, kinds, match, hint, optional?, strict?, when? })
 //             strict: only auto-guess when the target's NAME matches (never "any item")
-//   options - settings ({ id, label, type: 'choice'|'range'|'toggle'|'slot', default })
+//   options - settings ({ id, label, type: 'choice'|'range'|'toggle'|'slot'|'number', default, when? })
+//             when(options, roleTargets): only show the option when it applies
 //   build({ roles, options }) → steps
+//   loops(options) → loop count (optional, 0 = forever)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import foresterCampfire from './foresterCampfire.js';
 import manualFiremaking from './manualFiremaking.js';
+import highAlch from './highAlch.js';
 
-export const PRESETS = [foresterCampfire, manualFiremaking];
+export const PRESETS = [foresterCampfire, manualFiremaking, highAlch];
 
 export function defaultOptions(preset) {
   return Object.fromEntries(preset.options.map(o => [o.id, structuredClone(o.default)]));
@@ -22,6 +25,11 @@ export function defaultOptions(preset) {
 /** Roles that apply with the current options (e.g. "Bank close button" only when closing with X) */
 export function activeRoles(preset, options) {
   return preset.roles.filter(r => !r.when || r.when(options));
+}
+
+/** Options that apply right now (e.g. "Item inventory slot" only when the item is the Inventory) */
+export function activeOptions(preset, options, roleTargets) {
+  return preset.options.filter(o => !o.when || o.when(options, roleTargets));
 }
 
 /**
