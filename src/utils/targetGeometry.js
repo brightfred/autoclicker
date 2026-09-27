@@ -9,7 +9,11 @@ export const TARGET_KINDS = [
   { id: 'tile',      label: 'Tile',      icon: '◇', color: '#22c55e', hint: 'One game tile (fire spot, walk spot)' },
   { id: 'item',      label: 'Bank item', icon: '◆', color: '#38bdf8', hint: 'One item slot inside the bank' },
   { id: 'inventory', label: 'Inventory', icon: '▦', color: '#a78bfa', hint: 'Whole inventory — split into 28 slots' },
+  { id: 'minimap',   label: 'Minimap spot', icon: '⌖', color: '#2dd4bf', hint: 'A small spot on the minimap to walk to' },
 ];
+
+// Kinds I walk to (a "Walk to" step) — the others I click on
+export const WALK_KINDS = ['minimap', 'tile'];
 
 // OSRS inventory is 4 columns × 7 rows
 export const INV_COLS = 4;

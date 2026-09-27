@@ -154,6 +154,10 @@ function preview(seq) {
       if (!t) return '?';
       return t.kind === 'inventory' ? `${t.name} #${step.slot}` : t.name;
     }
+    if (step.type === 'walk') {
+      const t = targets.find(t => t.id === step.targetId);
+      return `➜ ${t ? t.name : '?'}`;
+    }
     if (step.type === 'key') return keyLabel(step.key);
     if (step.type === 'breakpoint') return '☕';
     if (step.type === 'camera') return '🧭';

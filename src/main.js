@@ -59,8 +59,8 @@ function loadRoute(win, route = '/') {
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 960,
-    height: 720,
+    width: 1080,
+    height: 800,
     minWidth: 860,
     minHeight: 600,
     frame: false,

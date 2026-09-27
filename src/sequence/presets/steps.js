@@ -17,6 +17,14 @@ export function click(target, { slot, button = 'left', ...flags } = {}) {
   return withFlags(step, flags);
 }
 
+/** Walk: click a minimap spot / tile, then wait minSec–maxSec while walking */
+export function walk(target, minSec, maxSec, flags = {}) {
+  const step = ACTION_TYPES.walk.create({ targetId: target.id });
+  step.minMs = Math.round(minSec * 1000);
+  step.maxMs = Math.round(maxSec * 1000);
+  return withFlags(step, flags);
+}
+
 /** Wait a random time between min and max seconds */
 export function wait(minSec, maxSec, flags = {}) {
   const step = ACTION_TYPES.wait.create();

@@ -22,8 +22,15 @@ export const ACTION_TYPES = {
       button: 'left',
     }),
   },
+  // Created from a minimap spot / tile dragged from the "Walk to" list
+  walk: {
+    label: 'Walk to',
+    icon:  '➜',
+    color: '#2dd4bf',
+    create: ({ targetId }) => ({ id: newStepId(), type: 'walk', targetId, minMs: 2500, maxMs: 4500 }),
+  },
   wait: {
-    label: 'Wait',
+    label: 'Pause',
     icon:  '◷',
     color: '#38bdf8',
     create: () => ({ id: newStepId(), type: 'wait', minMs: 600, maxMs: 1200 }),
