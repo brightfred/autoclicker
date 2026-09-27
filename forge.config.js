@@ -5,9 +5,9 @@ module.exports = {
   packagerConfig: {
     asar: true,
     // The Vite plugin normally only copies the .vite build folder into the app.
-    // My native modules (uiohook-napi, @jitsi/robotjs) are "external" in
-    // vite.main.config.mjs, so they are not bundled — without this, the
-    // installed app crashes with "Cannot find module 'uiohook-napi'".
+    // My native module (@jitsi/robotjs) is "external" in
+    // vite.main.config.mjs, so it's not bundled — without this, the
+    // installed app crashes with "Cannot find module '@jitsi/robotjs'".
     // Keeping /node_modules lets electron-packager copy my production
     // dependencies (devDependencies are still pruned out).
     // Return true = file is left out of the app, false = file is kept.
@@ -21,7 +21,8 @@ module.exports = {
     },
   },
   rebuildConfig: {
-    onlyModules: ['uiohook-napi'],
+    // robotjs ships prebuilt N-API binaries, so nothing needs rebuilding
+    onlyModules: [],
   },
   makers: [
     {

@@ -1,5 +1,8 @@
 <template>
-  <div class="app-shell">
+  <!-- Overlay windows only render the page itself, no app chrome -->
+  <router-view v-if="route.meta.bare" />
+
+  <div v-else class="app-shell">
 
     <!-- Titlebar -->
     <div class="titlebar">
@@ -18,11 +21,12 @@
 
       <!-- Sidebar -->
       <nav class="sidebar">
-        <router-link to="/" class="nav-item" active-class="nav-active">
-          <span>◈</span> Library
+        <!-- Sequences stays highlighted while I'm inside the editor too -->
+        <router-link to="/" class="nav-item" :class="{ 'nav-active': onSequences }">
+          <span>⛓</span> Sequences
         </router-link>
-        <router-link to="/record" class="nav-item" active-class="nav-active">
-          <span>◉</span> Record
+        <router-link to="/targets" class="nav-item" active-class="nav-active">
+          <span>⬚</span> Targets
         </router-link>
       </nav>
 
@@ -36,6 +40,12 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
+
+const route = useRoute();
+const onSequences = computed(() => route.path === '/' || route.path.startsWith('/sequence/'));
+
 function minimize() { window.electronAPI?.minimize(); }
 function close() { window.electronAPI?.close(); }
 </script>
