@@ -26,9 +26,9 @@ export function stepIssue(step, targetById) {
     case 'wait':
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
     case 'camera':
-      if (!step.faceNorth && !step.pitchUp && !step.zoomOut) return 'turn on N, Tilt or Zoom';
-      if (step.faceNorth && !targetById.get(step.compassTargetId)) return 'pick the compass';
-      if (step.zoomOut && !targetById.get(step.viewTargetId)) return 'pick where to scroll';
+      if (!step.faceNorth && !step.pitchUp && !step.zoomOut) return 'turn on North, Tilt or Zoom';
+      if (step.faceNorth && !targetById.get(step.compassTargetId)) return 'North: choose which target is your compass';
+      if (step.zoomOut && !targetById.get(step.viewTargetId)) return 'Zoom: choose a spot in the game view to scroll over';
       return null;
     default:
       return null;

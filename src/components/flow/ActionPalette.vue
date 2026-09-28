@@ -14,9 +14,9 @@
           v-for="a in builtIns" :key="a.type"
           class="card" :class="{ locked: busy }" :style="{ '--c': ACTION_TYPES[a.type].color }"
           :draggable="!busy"
-          @dragstart="$emit('drag-start', $event, () => ACTION_TYPES[a.type].create())"
+          @dragstart="$emit('drag-start', $event, () => ACTION_TYPES[a.type].create({ targets }))"
           @dragend="$emit('drag-end')"
-          @click="!busy && $emit('add', ACTION_TYPES[a.type].create())"
+          @click="!busy && $emit('add', ACTION_TYPES[a.type].create({ targets }))"
         >
           <span class="card-icon">{{ ACTION_TYPES[a.type].icon }}</span>
           <span class="card-text">

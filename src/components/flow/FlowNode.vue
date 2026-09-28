@@ -64,11 +64,25 @@
 
         <!-- Reset camera: each part can be switched on/off -->
         <template v-else-if="step.type === 'camera'">
-          <button class="chip" :class="{ on: step.faceNorth }" :disabled="busy" title="Click the compass → face north" @click="step.faceNorth = !step.faceNorth">North</button>
-          <TargetSelect v-if="step.faceNorth" v-model="step.compassTargetId" :targets="targets" placeholder="— compass —" :disabled="busy" />
-          <button class="chip" :class="{ on: step.pitchUp }" :disabled="busy" title="Hold the Up arrow → camera tilts to the top" @click="step.pitchUp = !step.pitchUp">Tilt</button>
-          <button class="chip" :class="{ on: step.zoomOut }" :disabled="busy" title="Scroll out over the game view → max zoom out" @click="step.zoomOut = !step.zoomOut">Zoom</button>
-          <TargetSelect v-if="step.zoomOut" v-model="step.viewTargetId" :targets="targets" placeholder="— scroll over —" :disabled="busy" />
+          <!-- Each part on its own line: switch + the target it needs -->
+          <div class="cam-row">
+            <button class="chip" :class="{ on: step.faceNorth }" :disabled="busy" title="Click the compass → face north" @click="step.faceNorth = !step.faceNorth">North</button>
+            <template v-if="step.faceNorth">
+              <span class="word">compass:</span>
+              <TargetSelect v-model="step.compassTargetId" :targets="targets" placeholder="choose your compass target" :disabled="busy" />
+            </template>
+          </div>
+          <div class="cam-row">
+            <button class="chip" :class="{ on: step.pitchUp }" :disabled="busy" title="Hold the Up arrow → camera tilts to the top" @click="step.pitchUp = !step.pitchUp">Tilt</button>
+            <span v-if="step.pitchUp" class="note">holds the ↑ key ~2s</span>
+          </div>
+          <div class="cam-row">
+            <button class="chip" :class="{ on: step.zoomOut }" :disabled="busy" title="Scroll out over the game view → max zoom out" @click="step.zoomOut = !step.zoomOut">Zoom</button>
+            <template v-if="step.zoomOut">
+              <span class="word">scroll over:</span>
+              <TargetSelect v-model="step.viewTargetId" :targets="targets" placeholder="choose a spot in the game view" :disabled="busy" />
+            </template>
+          </div>
         </template>
 
         <!-- Break point -->
@@ -172,6 +186,8 @@ function onTargetChange() {
 }
 
 .node-body { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cam-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+.cam-row .chip { width: 58px; }
 .word { font-size: 12px; color: var(--color-muted); }
 .note { font-size: 12px; color: var(--color-muted); font-style: italic; }
 .node-issue { font-size: 12px; color: var(--color-red); font-weight: 600; }

@@ -4,6 +4,11 @@
 // To add a new type: add it here + create/register its class in the engine.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Id of the first target whose name matches, or null
+function findByName(targets, pattern) {
+  return targets.find(t => pattern.test(t.name))?.id ?? null;
+}
+
 function newStepId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -46,11 +51,12 @@ export const ACTION_TYPES = {
     label: 'Reset camera',
     icon:  '🧭',
     color: '#f472b6',
-    create: () => ({
+    // Pre-fills targets named like "Compass" / "Game view" so it usually works right away
+    create: ({ targets = [] } = {}) => ({
       id: newStepId(), type: 'camera',
-      faceNorth: true, compassTargetId: null,
+      faceNorth: true, compassTargetId: findByName(targets, /compass/i),
       pitchUp: true,
-      zoomOut: true, viewTargetId: null,
+      zoomOut: true, viewTargetId: findByName(targets, /view|game|screen|world/i),
     }),
   },
   // A spot where a break is allowed — the efficiency slider decides if/how long

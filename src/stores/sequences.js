@@ -25,6 +25,7 @@ function withDefaults(seq) {
 export const useSequencesStore = defineStore('sequences', () => {
   const sequences = ref([]);
   const loaded    = ref(false);
+  const saveState = ref('saved');  // 'saving' while a change waits to be written, then 'saved'
   let saveTimer   = null;
 
   // Plain copy — IPC can't send Vue reactive proxies
@@ -39,8 +40,17 @@ export const useSequencesStore = defineStore('sequences', () => {
   }
 
   function persistSoon() {
+    saveState.value = 'saving';
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => window.electronAPI.saveSequences(snapshot()), SAVE_DELAY_MS);
+    saveTimer = setTimeout(async () => {
+      try {
+        await window.electronAPI.saveSequences(snapshot());
+        saveState.value = 'saved';
+      } catch (err) {
+        console.error('[SEQUENCES] Save failed:', err);
+        saveState.value = 'error';
+      }
+    }, SAVE_DELAY_MS);
   }
 
   // Any change anywhere (rename, add step, edit a wait...) gets saved
@@ -86,5 +96,5 @@ export const useSequencesStore = defineStore('sequences', () => {
     return res;
   }
 
-  return { sequences, loaded, load, getSequence, addSequence, duplicateSequence, deleteSequence, exportAll, importAll };
+  return { sequences, loaded, saveState, load, getSequence, addSequence, duplicateSequence, deleteSequence, exportAll, importAll };
 });

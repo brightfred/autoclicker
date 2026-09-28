@@ -43,7 +43,8 @@
 
     <!-- Sequence list -->
     <div v-else class="seq-list">
-      <div v-for="seq in sequences" :key="seq.id" class="seq-card" @dblclick="edit(seq)">
+      <!-- Clicking anywhere on the card opens it (buttons on the right do their own thing) -->
+      <div v-for="seq in sequences" :key="seq.id" class="seq-card" title="Open to edit or run" @click="edit(seq)">
         <span class="seq-icon">⛓</span>
 
         <div class="seq-body">
@@ -59,16 +60,16 @@
           </div>
         </div>
 
-        <div class="seq-actions">
+        <div class="seq-actions" @click.stop>
           <button class="btn-icon" @click="duplicate(seq)" title="Duplicate">⧉</button>
           <button class="btn-icon btn-delete" @click="toDelete = seq" title="Delete">✕</button>
-          <button class="btn-icon btn-go" @click="edit(seq)" title="Open">▶</button>
+          <button class="btn-edit" @click="edit(seq)" title="Open to edit or run">✎ Edit</button>
         </div>
       </div>
     </div>
 
     <!-- New sequence -->
-    <div v-if="creating" class="modal-backdrop" @click.self="creating = null">
+    <ModalBackdrop v-if="creating" @close="creating = null">
       <form class="modal" @submit.prevent="create">
         <p class="modal-title">New sequence</p>
         <label class="field">
@@ -86,13 +87,13 @@
           <button type="submit" class="btn-primary" :disabled="!creating.name.trim() || !creating.setupId">Create</button>
         </div>
       </form>
-    </div>
+    </ModalBackdrop>
 
     <!-- Build from a preset (Forester's campfire, manual firemaking...) -->
     <PresetWizard v-if="showPresets" @close="showPresets = false" @created="onPresetCreated" />
 
     <!-- Delete confirmation -->
-    <div v-if="toDelete" class="modal-backdrop" @click.self="toDelete = null">
+    <ModalBackdrop v-if="toDelete" @close="toDelete = null">
       <div class="modal">
         <p class="modal-title">Delete sequence "<strong>{{ toDelete.name }}</strong>"?</p>
         <div class="modal-actions">
@@ -100,7 +101,7 @@
           <button class="btn-danger" @click="doDelete">Delete</button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
 
     <transition name="fade">
       <div v-if="toast" class="toast" :class="toast.type">{{ toast.text }}</div>
@@ -117,6 +118,7 @@ import { useSequencesStore } from '../stores/sequences';
 import { useTargetsStore } from '../stores/targets';
 import { ACTION_TYPES, keyLabel } from '../sequence/actionTypes.js';
 import PresetWizard from '../components/PresetWizard.vue';
+import ModalBackdrop from '../components/ModalBackdrop.vue';
 
 const router      = useRouter();
 const seqStore    = useSequencesStore();
@@ -255,7 +257,22 @@ onMounted(() => {
   border-left: 3px solid var(--color-accent);
   transition: border-color 0.15s;
 }
-.seq-card:hover { border-color: #2e3850; border-left-color: var(--color-accent); }
+.seq-card:hover { border-color: #2e3850; border-left-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 4%, var(--color-panel)); }
+.seq-card { cursor: pointer; }
+.btn-edit {
+  height: 32px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-edit:hover { background: rgba(245, 166, 35, 0.12); }
 .seq-icon { font-size: 20px; color: var(--color-accent); width: 22px; text-align: center; }
 .seq-body { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .seq-name-row { display: flex; align-items: center; gap: 10px; }

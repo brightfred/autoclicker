@@ -23,9 +23,9 @@ export class CameraAction extends Action {
   validate({ targets }) {
     const { faceNorth, compassTargetId, pitchUp, zoomOut, viewTargetId } = this.def;
     const problems = [];
-    if (!faceNorth && !pitchUp && !zoomOut) problems.push('Reset camera: turn on at least one part (north, tilt or zoom)');
-    if (faceNorth && !targets.get(compassTargetId)) problems.push('Reset camera: pick the compass target');
-    if (zoomOut && !targets.get(viewTargetId)) problems.push('Reset camera: pick a spot in the game view to scroll over');
+    if (!faceNorth && !pitchUp && !zoomOut) problems.push('Reset camera: turn on at least one part (North, Tilt or Zoom)');
+    if (faceNorth && !targets.get(compassTargetId)) problems.push('Reset camera → North: choose which target is your compass');
+    if (zoomOut && !targets.get(viewTargetId)) problems.push('Reset camera → Zoom: choose a spot in the game view to scroll over');
     return problems;
   }
 

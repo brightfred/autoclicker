@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-backdrop" @click.self="$emit('close')">
+  <ModalBackdrop @close="$emit('close')">
     <div class="wizard">
 
       <header class="wiz-head">
@@ -123,7 +123,7 @@
         <button class="btn-primary" :disabled="!canCreate" @click="create">Create sequence</button>
       </footer>
     </div>
-  </div>
+  </ModalBackdrop>
 </template>
 
 <script setup>
@@ -131,6 +131,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useTargetsStore } from '../stores/targets';
 import { useSequencesStore } from '../stores/sequences';
+import ModalBackdrop from './ModalBackdrop.vue';
 import { PRESETS, defaultOptions, activeRoles, activeOptions, guessRoles } from '../sequence/presets/index.js';
 import { getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 

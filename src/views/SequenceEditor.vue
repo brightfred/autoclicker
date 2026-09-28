@@ -6,6 +6,11 @@
       <button class="btn-ghost back" @click="router.push('/')">←</button>
       <input v-model="seq.name" class="name-input" maxlength="40" :disabled="busy" />
 
+      <!-- Every change saves by itself — this just shows it happened -->
+      <span class="save-state" :class="seqStore.saveState" :title="SAVE_TITLES[seqStore.saveState]">
+        {{ SAVE_LABELS[seqStore.saveState] }}
+      </span>
+
       <div class="status-pill" :class="[`is-${run.state}`, { 'is-break': run.onBreak }]">
         <template v-if="run.state === 'countdown'">Starting in {{ run.countdown }}…</template>
         <template v-else-if="run.state === 'running' && run.onBreak">
@@ -206,6 +211,13 @@ import FlowNode from '../components/flow/FlowNode.vue';
 import ActionPalette from '../components/flow/ActionPalette.vue';
 
 const COUNTDOWN_SEC = 3;
+
+const SAVE_LABELS = { saved: '✓ Saved', saving: 'Saving…', error: '⚠ Not saved' };
+const SAVE_TITLES = {
+  saved:  'Every change is saved automatically',
+  saving: 'Saving your last change…',
+  error:  'Could not write sequences.json — check the console',
+};
 
 const route       = useRoute();
 const router      = useRouter();
@@ -503,6 +515,11 @@ onBeforeUnmount(() => {
 }
 .name-input:hover:not(:disabled) { border-color: var(--color-border); }
 .name-input:focus { border-color: var(--color-accent); background: var(--color-panel); }
+
+.save-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; color: var(--color-muted); }
+.save-state.saved  { color: var(--color-green); }
+.save-state.saving { color: var(--color-accent); }
+.save-state.error  { color: var(--color-red); }
 
 .status-pill {
   font-family: var(--font-mono);

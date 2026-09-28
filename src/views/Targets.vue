@@ -108,7 +108,7 @@
     </section>
 
     <!-- Name prompt (new setup / rename) -->
-    <div v-if="prompt" class="modal-backdrop" @click.self="prompt = null">
+    <ModalBackdrop v-if="prompt" @close="prompt = null">
       <form class="modal" @submit.prevent="submitPrompt">
         <p class="modal-title">{{ prompt.title }}</p>
         <input ref="promptInput" v-model="prompt.value" class="input" maxlength="40" />
@@ -117,10 +117,10 @@
           <button type="submit" class="btn-primary" :disabled="!prompt.value.trim()">Save</button>
         </div>
       </form>
-    </div>
+    </ModalBackdrop>
 
     <!-- Delete confirmation -->
-    <div v-if="toDelete" class="modal-backdrop" @click.self="toDelete = null">
+    <ModalBackdrop v-if="toDelete" @close="toDelete = null">
       <div class="modal">
         <p class="modal-title">
           Delete {{ toDelete.type }} "<strong>{{ toDelete.item.name }}</strong>"?
@@ -131,7 +131,7 @@
           <button class="btn-danger" @click="doDelete">Delete</button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
 
     <!-- Small status message -->
     <transition name="fade">
@@ -145,6 +145,7 @@
 import { ref, nextTick, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useTargetsStore } from '../stores/targets';
+import ModalBackdrop from '../components/ModalBackdrop.vue';
 import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 
 const store = useTargetsStore();
