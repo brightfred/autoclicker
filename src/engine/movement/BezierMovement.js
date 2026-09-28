@@ -4,18 +4,21 @@
 //   - Duration from Fitts's law: far or small targets take longer, like a real hand
 //   - Speed profile: starts slow, speeds up, slows down near the target
 //     (minimum-jerk curve, the way human arm movements behave)
+//   - Speed varies like a hand: a slowly wandering tempo, each move a bit
+//     faster or slower, and top speed at a different moment each time
+//     (all decided by HumanSpeed)
 //   - Tiny hand tremor along the path
 //   - Sometimes overshoots on long moves, then corrects back onto the target
 // Every call is random, so no two paths are ever the same.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { MovementStrategy } from './MovementStrategy.js';
+import { HumanSpeed } from './HumanSpeed.js';
 
 // All the knobs in one place so I can tune the feel without touching the math
 export const DEFAULT_BEZIER_OPTIONS = {
   fittsA:           90,    // ms — base reaction/move time
   fittsB:           120,   // ms — extra time per "bit" of difficulty
-  durationJitter:   0.18,  // ± % random variation on duration
   minDuration:      70,    // ms
   maxDuration:      1400,  // ms
   curveSpread:      0.22,  // how far control points can go from the straight line (× distance)
@@ -32,6 +35,13 @@ function minimumJerk(t) {
   return t * t * t * (10 - 15 * t + 6 * t * t);
 }
 
+// Same smooth start/stop, but with top speed at `peakAt` instead of exactly
+// halfway: I bend time first (t^k) so that the curve's middle lands at peakAt.
+function minimumJerkPeakAt(t, peakAt) {
+  const k = Math.log(0.5) / Math.log(peakAt);
+  return minimumJerk(Math.pow(t, k));
+}
+
 function cubicBezier(p0, p1, p2, p3, t) {
   const u = 1 - t;
   return {
@@ -45,9 +55,14 @@ function rand(min, max) {
 }
 
 export class BezierMovement extends MovementStrategy {
-  constructor(options = {}) {
+  /**
+   * @param {object} [options]    - see DEFAULT_BEZIER_OPTIONS
+   * @param {HumanSpeed} [speed]  - decides how fast each move is
+   */
+  constructor(options = {}, speed = new HumanSpeed()) {
     super();
     this.options = { ...DEFAULT_BEZIER_OPTIONS, ...options };
+    this.speed   = speed;
   }
 
   plan(from, to, { targetSize = 30 } = {}) {
@@ -56,27 +71,29 @@ export class BezierMovement extends MovementStrategy {
 
     const { overshootChance, overshootMinDist, overshootPx } = this.options;
 
+    // How fast this particular move is (tempo + per-move wobble + speed shape)
+    const speed = this.speed.next();
+
     // Long move + bad luck = overshoot a little past the target, then correct
     if (distance > overshootMinDist && Math.random() < overshootChance) {
       const overshoot = this.#overshootPoint(from, to, rand(...overshootPx));
-      const first  = this.#segment(from, overshoot, targetSize);
-      const second = this.#segment(overshoot, to, targetSize * 2, first.at(-1).t);
+      const first  = this.#segment(from, overshoot, targetSize, speed);
+      const second = this.#segment(overshoot, to, targetSize * 2, speed, first.at(-1).t);
       return this.#finalize([...first, ...second.slice(1)], to);
     }
 
-    return this.#finalize(this.#segment(from, to, targetSize), to);
+    return this.#finalize(this.#segment(from, to, targetSize, speed), to);
   }
 
   // ── One curved segment ────────────────────────────────────────────────────
 
-  #segment(from, to, targetSize, startTime = 0) {
+  #segment(from, to, targetSize, speed, startTime = 0) {
     const o = this.options;
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
 
-    // Fitts's law: time = a + b * log2(distance / size + 1)
+    // Fitts's law: time = a + b * log2(distance / size + 1), then HumanSpeed's factor
     const fitts    = o.fittsA + o.fittsB * Math.log2(distance / Math.max(targetSize, 1) + 1);
-    const jitter   = 1 + rand(-o.durationJitter, o.durationJitter);
-    const duration = Math.min(o.maxDuration, Math.max(o.minDuration, fitts * jitter));
+    const duration = Math.min(o.maxDuration, Math.max(o.minDuration, fitts * speed.durationFactor));
 
     const [c1, c2] = this.#controlPoints(from, to, distance);
     const steps    = Math.max(6, Math.round(duration / o.sampleEveryMs));
@@ -90,7 +107,7 @@ export class BezierMovement extends MovementStrategy {
     const points = [];
     for (let i = 0; i <= steps; i++) {
       const linear = i / steps;
-      const eased  = minimumJerk(linear);
+      const eased  = minimumJerkPeakAt(linear, speed.peakAt);
       const p      = cubicBezier(from, c1, c2, to, eased);
 
       // Tremor fades out at both ends so start/end are exact

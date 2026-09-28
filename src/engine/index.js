@@ -34,7 +34,8 @@ export class Engine {
    */
   async moveToTarget(target, { slot, shouldStop } = {}) {
     const rect    = this.resolver.resolve(target, slot);
-    const point   = this.picker.pick(rect);
+    // Each target (and each inventory slot) keeps its own favourite spot
+    const point   = this.picker.pick(rect, slot ? `${target.id}:${slot}` : target.id);
     const reached = await this.mover.moveTo(point, { targetSize: Math.min(rect.w, rect.h), shouldStop });
     return reached ? point : null;
   }
