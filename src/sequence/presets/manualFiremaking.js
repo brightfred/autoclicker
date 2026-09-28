@@ -59,7 +59,8 @@ export default {
       ? [click(roles.closeX), wait(0.3, 0.6)]
       : [key('escape'), wait(0.3, 0.6)]));
 
-    for (const spot of [roles.walk1, roles.walk2].filter(Boolean)) {
+    // Walk 1 is required (kept even if not picked yet), walk 2 only if I set one
+    for (const spot of [roles.walk1, ...(roles.walk2 ? [roles.walk2] : [])]) {
       steps.push(walk(spot, ...options.walk));
     }
 

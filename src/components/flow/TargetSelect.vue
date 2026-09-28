@@ -28,5 +28,5 @@ const current = computed(() => props.targets.find(t => t.id === props.modelValue
 </script>
 
 <style scoped>
-.target-select { width: 150px; padding: 4px 8px; font-size: 13px; }
+.target-select { width: 190px; padding: 4px 8px; font-size: 13px; }
 </style>
