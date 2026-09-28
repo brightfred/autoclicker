@@ -36,7 +36,8 @@ export default {
   loops: (options) => Math.max(0, Math.round(options.count || 0)),
 
   build({ roles, options }) {
-    const onItem = roles.item.kind === 'inventory' ? { slot: options.itemSlot } : {};
+    // Keep the slot when the item isn't picked yet, in case I pick the Inventory later
+    const onItem = !roles.item || roles.item.kind === 'inventory' ? { slot: options.itemSlot } : {};
     return [
       click(roles.spell),
       wait(...options.spellToItem),

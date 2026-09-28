@@ -6,6 +6,11 @@
       <button class="btn-ghost back" @click="router.push('/')">←</button>
       <input v-model="seq.name" class="name-input" maxlength="40" :disabled="busy" />
 
+      <!-- Unfinished: click to jump to the first step that still needs something -->
+      <button v-if="issues.length" class="todo-chip" :title="issueTooltip" @click="jumpToIssue">
+        ⚠ {{ issues.length }} to finish
+      </button>
+
       <!-- Every change saves by itself — this just shows it happened -->
       <span class="save-state" :class="seqStore.saveState" :title="SAVE_TITLES[seqStore.saveState]">
         {{ SAVE_LABELS[seqStore.saveState] }}
@@ -136,6 +141,7 @@
               :active="run.state === 'running' && run.stepId === step.id"
               :skipped="run.state === 'running' && isSkipped(step, run.loop)"
               :class="{ moving: dragFrom === i }"
+              :data-index="i"
               :draggable="!busy && handleIndex === i"
               @dragstart="startNodeDrag($event, i)"
               @dragend="endDrag"
@@ -181,6 +187,7 @@
         @drag-start="startPaletteDrag"
         @drag-end="endDrag"
         @add="append"
+        @new-target="goDrawTargets"
       />
     </div>
 
@@ -206,7 +213,7 @@ import { useSequencesStore } from '../stores/sequences';
 import { useTargetsStore } from '../stores/targets';
 import { cloneStep } from '../sequence/actionTypes.js';
 import { isSkipped } from '../sequence/loopModes.js';
-import { stepDurationMs } from '../sequence/stepIssues.js';
+import { stepDurationMs, sequenceIssues } from '../sequence/stepIssues.js';
 import FlowNode from '../components/flow/FlowNode.vue';
 import ActionPalette from '../components/flow/ActionPalette.vue';
 
@@ -304,6 +311,29 @@ function showToast(text, type = 'ok') {
 function setLoops(value) {
   const n = Math.round(Number(value));
   seq.value.loops = n >= 1 ? n : 1;
+}
+
+// ── Unfinished ───────────────────────────────────────────────────────────────
+// A sequence is saved from the moment it exists, even half done. These show
+// what's left, and let me hop to Targets and back to finish it.
+
+const issues = computed(() => sequenceIssues(seq.value, targetById.value));
+
+const issueTooltip = computed(() =>
+  issues.value.slice(0, 6).map(i => (i.index !== null ? `Step ${i.index + 1}: ` : '') + i.text).join('\n'));
+
+function jumpToIssue() {
+  const first = issues.value.find(i => i.index !== null);
+  if (!first) return;
+  const node = document.querySelector(`.canvas .node[data-index="${first.index}"]`);
+  node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  node?.classList.add('flash');
+  setTimeout(() => node?.classList.remove('flash'), 1200);
+}
+
+// Open Targets on THIS sequence's setup, with a way back here
+function goDrawTargets() {
+  router.push({ path: '/targets', query: { setup: seq.value.setupId, from: route.fullPath } });
 }
 
 // Rough duration of one loop (middle of each wait + ~0.7s per click/key)
@@ -515,6 +545,19 @@ onBeforeUnmount(() => {
 }
 .name-input:hover:not(:disabled) { border-color: var(--color-border); }
 .name-input:focus { border-color: var(--color-accent); background: var(--color-panel); }
+
+.todo-chip {
+  padding: 5px 10px;
+  background: rgba(245, 166, 35, 0.08);
+  border: 1px dashed var(--color-accent);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.todo-chip:hover { background: rgba(245, 166, 35, 0.16); }
+.canvas :deep(.node.flash) { box-shadow: 0 0 0 2px var(--color-accent), 0 0 20px rgba(245, 166, 35, 0.4); }
 
 .save-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; color: var(--color-muted); }
 .save-state.saved  { color: var(--color-green); }

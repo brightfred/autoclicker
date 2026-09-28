@@ -14,7 +14,8 @@ import { Action } from './Action.js';
 export class WalkAction extends Action {
   validate({ targets }) {
     const { targetId, minMs, maxMs } = this.def;
-    if (!targets.get(targetId)) return ['Walk: the target was deleted or is not in this setup'];
+    if (!targetId) return ['Walk: choose where to walk'];
+    if (!targets.get(targetId)) return ['Walk: the target was deleted or is in another setup'];
     if (!(minMs >= 0) || !(maxMs >= 0)) return ['Walk: the walking time must be 0 or more'];
     if (minMs > maxMs) return ['Walk: min walking time is bigger than max'];
     return [];

@@ -107,11 +107,13 @@
       <!-- Preview + create -->
       <footer class="wiz-foot">
         <div class="preview">
-          <template v-if="missing.length">
-            <span class="warn">Still needed: {{ missing.map(r => r.label).join(', ') }}</span>
-          </template>
-          <template v-else-if="problem">
+          <template v-if="problem">
             <span class="warn">{{ problem }}</span>
+          </template>
+          <template v-else-if="missing.length">
+            <span class="later" :title="`Still needed: ${missing.map(r => r.label).join(', ')}`">
+              ⚠ {{ missing.length }} target{{ missing.length !== 1 ? 's' : '' }} missing — you can finish it later
+            </span>
           </template>
           <template v-else>
             <span class="stat">{{ builtSteps.length }} steps</span>
@@ -120,7 +122,9 @@
           </template>
         </div>
         <button class="btn-ghost" @click="$emit('close')">Cancel</button>
-        <button class="btn-primary" :disabled="!canCreate" @click="create">Create sequence</button>
+        <button class="btn-primary" :disabled="!canCreate" @click="create">
+          {{ missing.length ? 'Create unfinished' : 'Create sequence' }}
+        </button>
       </footer>
     </div>
   </ModalBackdrop>
@@ -176,9 +180,10 @@ const problem = computed(() => {
   return null;
 });
 
-// Build the steps live, so the preview always matches what I'll get
+// Build the steps live, so the preview always matches what I'll get.
+// Missing targets are fine: those steps get an empty slot I fill in later.
 const builtSteps = computed(() => {
-  if (missing.value.length || problem.value) return [];
+  if (problem.value) return [];
   return preset.value.build({ roles: roleTargets.value, options });
 });
 
@@ -312,6 +317,7 @@ onMounted(guess);
 .target-select.missing { border-color: rgba(239, 68, 68, 0.6); }
 
 .warn { font-size: 12px; color: var(--color-red); font-weight: 600; }
+.later { font-size: 12px; color: var(--color-accent); font-weight: 600; }
 .warn a { color: var(--color-accent); }
 
 .wiz-foot {

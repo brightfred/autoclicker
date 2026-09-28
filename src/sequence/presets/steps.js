@@ -5,13 +5,16 @@
 //
 // Loop flags (any step):  { firstLoopOnly: true }  only on loop 1
 //                         { skipFirstLoop: true }  only from loop 2 on
+//
+// A target can be null (I created the sequence "unfinished"): the step is still
+// added, with an empty target slot I fill in later in the editor.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { ACTION_TYPES } from '../actionTypes.js';
 
 /** Click a target. For an inventory target, pass { slot } */
 export function click(target, { slot, button = 'left', ...flags } = {}) {
-  const step = ACTION_TYPES.click.create({ targetId: target.id, kind: target.kind });
+  const step = ACTION_TYPES.click.create({ targetId: target?.id ?? null, kind: target?.kind });
   if (slot) step.slot = slot;
   step.button = button;
   return withFlags(step, flags);
@@ -19,7 +22,7 @@ export function click(target, { slot, button = 'left', ...flags } = {}) {
 
 /** Walk: click a minimap spot / tile, then wait minSec–maxSec while walking */
 export function walk(target, minSec, maxSec, flags = {}) {
-  const step = ACTION_TYPES.walk.create({ targetId: target.id });
+  const step = ACTION_TYPES.walk.create({ targetId: target?.id ?? null });
   step.minMs = Math.round(minSec * 1000);
   step.maxMs = Math.round(maxSec * 1000);
   return withFlags(step, flags);

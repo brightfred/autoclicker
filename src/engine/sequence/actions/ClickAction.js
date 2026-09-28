@@ -10,8 +10,9 @@ const SLOT_COUNT = INV_COLS * INV_ROWS;
 
 export class ClickAction extends Action {
   validate({ targets }) {
+    if (!this.def.targetId) return ['Click: choose a target'];
     const target = targets.get(this.def.targetId);
-    if (!target) return ['Click: the target was deleted or is not in this setup'];
+    if (!target) return ['Click: the target was deleted or is in another setup'];
 
     if (target.kind === 'inventory') {
       const slot = Number(this.def.slot);

@@ -2,7 +2,11 @@
   <!-- Right-side panel: everything I can drag into the flow -->
   <aside class="palette">
     <div class="palette-head">
-      <div class="panel-title">Add to flow</div>
+      <div class="head-row">
+        <div class="panel-title">Add to flow</div>
+        <!-- Forgot a target? Draw it now and come right back -->
+        <button class="new-target" title="Draw a new target for this sequence's setup" @click="$emit('new-target')">+ New target</button>
+      </div>
       <input v-model="search" class="input search" placeholder="Search…" />
     </div>
 
@@ -30,7 +34,7 @@
       <section class="group">
         <div class="group-title">Walk to</div>
         <p v-if="walkTargets.length === 0" class="empty-hint">
-          Draw a <strong>Minimap spot</strong> or <strong>Tile</strong> in <router-link to="/targets">Targets</router-link>.
+          Draw a <strong>Minimap spot</strong> or <strong>Tile</strong> — <a href="#" @click.prevent="$emit('new-target')">+ New target</a>.
         </p>
         <div
           v-for="t in walkTargets" :key="t.id"
@@ -52,7 +56,7 @@
       <section class="group">
         <div class="group-title">Click</div>
         <p v-if="clickTargets.length === 0" class="empty-hint">
-          No targets in this setup — <router-link to="/targets">draw some</router-link>.
+          No targets in this setup yet — <a href="#" @click.prevent="$emit('new-target')">+ New target</a>.
         </p>
         <div
           v-for="t in clickTargets" :key="t.id"
@@ -84,7 +88,7 @@ const props = defineProps({
   targets: { type: Array, required: true },
   busy:    { type: Boolean, default: false },
 });
-defineEmits(['drag-start', 'drag-end', 'add']);
+defineEmits(['drag-start', 'drag-end', 'add', 'new-target']);
 
 // Built-in actions that aren't tied to a target
 const BUILT_INS = [
@@ -114,6 +118,18 @@ const clickTargets = computed(() => props.targets.filter(t => t.kind !== 'minima
   border: 1px solid var(--color-border);
 }
 .palette-head { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--color-border); }
+.head-row { display: flex; align-items: center; justify-content: space-between; }
+.new-target {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.new-target:hover { background: rgba(245, 166, 35, 0.12); }
 .search { padding: 5px 8px; font-size: 13px; }
 .palette-scroll { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 14px; }
 

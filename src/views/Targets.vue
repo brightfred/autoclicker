@@ -14,6 +14,12 @@
       </div>
     </div>
 
+    <!-- Came here from a sequence to add a missing target → easy way back -->
+    <div v-if="returnTo" class="return-bar">
+      <span>Adding targets for <strong>{{ returnTo.name }}</strong> — they go in the <strong>{{ activeSetup?.name }}</strong> setup.</span>
+      <button class="btn-primary" @click="router.push(returnTo.path)">← Back to sequence</button>
+    </div>
+
     <!-- Setup bar -->
     <div class="setup-bar">
       <label class="field-label" for="setup-select">Setup</label>
@@ -142,13 +148,26 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useTargetsStore } from '../stores/targets';
 import ModalBackdrop from '../components/ModalBackdrop.vue';
+import { useSequencesStore } from '../stores/sequences';
 import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 
-const store = useTargetsStore();
+const store    = useTargetsStore();
+const seqStore = useSequencesStore();
+const route    = useRoute();
+const router   = useRouter();
+
+// ?from=/sequence/<id> → the sequence I came from (for the "Back" banner)
+const returnTo = computed(() => {
+  const from = route.query.from;
+  if (typeof from !== 'string' || !from.startsWith('/sequence/')) return null;
+  const seq = seqStore.getSequence(from.split('/')[2]);
+  return seq ? { path: from, name: seq.name } : null;
+});
 const { setups, activeSetup, targets } = storeToRefs(store);
 
 const newKind     = ref('zone');
@@ -302,12 +321,32 @@ async function doImport() {
   else if (res.error) showToast(res.error, 'error');
 }
 
-onMounted(() => {
-  if (!store.loaded) store.load();
+onMounted(async () => {
+  if (!store.loaded) await store.load();
+  if (!seqStore.loaded) await seqStore.load();
+
+  // ?setup=<id> → open that setup, so new targets land where the sequence can use them
+  const wanted = route.query.setup;
+  if (typeof wanted === 'string' && store.setups.some(s => s.id === wanted) && store.activeSetupId !== wanted) {
+    store.selectSetup(wanted);
+  }
 });
 </script>
 
 <style scoped>
+/* ── Return banner ── */
+.return-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  background: rgba(245, 166, 35, 0.08);
+  border: 1px solid var(--color-accent);
+}
+.return-bar strong { color: var(--color-accent); }
+
 /* ── Setup bar ── */
 .setup-bar {
   display: flex;

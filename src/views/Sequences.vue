@@ -51,6 +51,12 @@
           <div class="seq-name-row">
             <span class="seq-name">{{ seq.name }}</span>
             <span class="badge" :class="{ missing: !setupName(seq) }">{{ setupName(seq) ?? 'setup deleted' }}</span>
+            <!-- Saved but not ready to run yet (missing targets, empty steps...) -->
+            <span
+              v-if="issuesOf(seq).length"
+              class="unfinished"
+              :title="issuesOf(seq).slice(0, 5).map(i => (i.index !== null ? `Step ${i.index + 1}: ` : '') + i.text).join('\n')"
+            >⚠ Unfinished · {{ issuesOf(seq).length }} to fix</span>
           </div>
           <div class="seq-meta">
             <span class="stat">{{ seq.actions.length }} step{{ seq.actions.length !== 1 ? 's' : '' }}</span>
@@ -117,6 +123,7 @@ import { storeToRefs } from 'pinia';
 import { useSequencesStore } from '../stores/sequences';
 import { useTargetsStore } from '../stores/targets';
 import { ACTION_TYPES, keyLabel } from '../sequence/actionTypes.js';
+import { sequenceIssues } from '../sequence/stepIssues.js';
 import PresetWizard from '../components/PresetWizard.vue';
 import ModalBackdrop from '../components/ModalBackdrop.vue';
 
@@ -145,6 +152,12 @@ function setupOf(seq) {
 
 function setupName(seq) {
   return setupOf(seq)?.name ?? null;
+}
+
+// What's left to finish before this sequence can run
+function issuesOf(seq) {
+  const targetById = new Map((setupOf(seq)?.targets ?? []).map(t => [t.id, t]));
+  return sequenceIssues(seq, targetById);
 }
 
 // Short "Banker → Wait → Esc → ..." summary of the first steps
@@ -278,6 +291,16 @@ onMounted(() => {
 .seq-name-row { display: flex; align-items: center; gap: 10px; }
 .seq-name { font-weight: 700; font-size: 15px; }
 .badge.missing { --badge: var(--color-red); }
+.unfinished {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  border: 1px dashed var(--color-accent);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
 .seq-meta { display: flex; gap: 8px; flex-wrap: nowrap; min-width: 0; }
 .seq-meta .stat { white-space: nowrap; flex-shrink: 0; }
 .stat.preview { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

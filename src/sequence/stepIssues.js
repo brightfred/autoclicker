@@ -15,13 +15,15 @@ const SLOT_COUNT = INV_COLS * INV_ROWS;
 export function stepIssue(step, targetById) {
   switch (step.type) {
     case 'click': {
+      if (!step.targetId) return 'choose a target';
       const t = targetById.get(step.targetId);
-      if (!t) return 'target not in this setup';
+      if (!t) return 'target was deleted or is in another setup';
       if (t.kind === 'inventory' && !(step.slot >= 1 && step.slot <= SLOT_COUNT)) return 'pick a slot';
       return null;
     }
     case 'walk':
-      if (!targetById.get(step.targetId)) return 'target not in this setup';
+      if (!step.targetId) return 'choose where to walk';
+      if (!targetById.get(step.targetId)) return 'target was deleted or is in another setup';
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
     case 'wait':
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
@@ -33,6 +35,17 @@ export function stepIssue(step, targetById) {
     default:
       return null;
   }
+}
+
+/**
+ * Everything left to finish in a sequence (empty → ready to run).
+ * @returns {{ index: number|null, text: string }[]}  index = step (0-based), null = whole sequence
+ */
+export function sequenceIssues(sequence, targetById) {
+  if (!sequence.actions.length) return [{ index: null, text: 'no steps yet' }];
+  return sequence.actions
+    .map((step, index) => ({ index, text: stepIssue(step, targetById) }))
+    .filter(issue => issue.text);
 }
 
 /** Rough time a step takes (ms), for the "≈ per loop" estimate */
