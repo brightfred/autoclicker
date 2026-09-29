@@ -10,7 +10,11 @@ export const TARGET_KINDS = [
   { id: 'item',      label: 'Bank item', icon: '◆', color: '#38bdf8', hint: 'One item slot inside the bank' },
   { id: 'inventory', label: 'Inventory', icon: '▦', color: '#a78bfa', hint: 'Whole inventory — split into 28 slots' },
   { id: 'minimap',   label: 'Minimap spot', icon: '⌖', color: '#2dd4bf', hint: 'A small spot on the minimap to walk to' },
+  { id: 'check',     label: 'Check area',   icon: '👁', color: '#e879f9', hint: 'An area to watch: bank open, slot empty…' },
 ];
+
+// Kinds that are only watched, never clicked (a "Wait until" step)
+export const WATCH_KINDS = ['check'];
 
 // Kinds I walk to (a "Walk to" step) — the others I click on
 export const WALK_KINDS = ['minimap', 'tile'];

@@ -12,6 +12,7 @@
  * @property {() => boolean} shouldStop      - true once I pressed Stop / F6
  * @property {(ms:number) => Promise<boolean>} sleep - stoppable sleep, false if stopped
  * @property {() => Promise<void>} breakPoint - maybe take a break here (efficiency policy decides)
+ * @property {Set<string>} stepIds  - ids of all steps (for If / Go to)
  */
 
 export class Action {
@@ -26,7 +27,11 @@ export class Action {
     return [];
   }
 
-  /** @param {RunContext} ctx  @returns {Promise<void>} */
+  /**
+   * @param {RunContext} ctx
+   * @returns {Promise<object|void>} nothing = go to the next step, or a flow
+   *          signal from ../flow.js (go to a step / next loop / stop)
+   */
   // eslint-disable-next-line no-unused-vars
   async execute(ctx) {
     throw new Error(`${this.constructor.name} must implement execute()`);

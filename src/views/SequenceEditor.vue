@@ -138,6 +138,7 @@
               :target-by-id="targetById"
               :busy="busy"
               :efficiency="seq.efficiency"
+              :all-steps="seq.actions"
               :active="run.state === 'running' && run.stepId === step.id"
               :skipped="run.state === 'running' && isSkipped(step, run.loop)"
               :class="{ moving: dragFrom === i }"
@@ -473,6 +474,7 @@ function onStatus(status) {
     run.onBreak = null;
     if (status.problems) problems.value = status.problems;
     else if (status.error) showToast(`Stopped: ${status.error}`, 'error');
+    else if (status.endedBy) showToast(`Finished: ${status.endedBy}`);
     else showToast(status.stopped ? 'Stopped' : 'Finished all loops');
   }
 }

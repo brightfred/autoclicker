@@ -75,9 +75,11 @@ export const useTargetsStore = defineStore('targets', () => {
 
   // ── Targets (always inside the active setup) ──────────────────────────────
 
-  function addTarget({ name, kind, rect }) {
+  // snapshot: only for "Check area" targets (how the area should look)
+  function addTarget({ name, kind, rect, snapshot }) {
     if (!activeSetup.value) return null;
     const target = { id: newId(), name, kind, rect, createdAt: new Date().toISOString() };
+    if (snapshot) target.snapshot = snapshot;
     activeSetup.value.targets.push(target);
     persist();
     return target;

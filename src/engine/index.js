@@ -1,5 +1,6 @@
 // ── Engine ────────────────────────────────────────────────────────────────────
-// What the rest of the app uses to act on the game: move, click, press keys.
+// What the rest of the app uses to act on the game: move, click, press keys,
+// and look at the screen (snapshots of "Check area" targets).
 // createEngine() is the one place where I pick which concrete classes are used.
 // Want a different movement algorithm or input library? Change it there only.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,6 +10,8 @@ import { BezierMovement } from './movement/BezierMovement.js';
 import { MouseMover } from './movement/MouseMover.js';
 import { PointPicker } from './targeting/PointPicker.js';
 import { TargetResolver } from './targeting/TargetResolver.js';
+import { RobotJsScreen } from './vision/RobotJsScreen.js';
+import { SnapshotMatcher } from './vision/SnapshotMatcher.js';
 
 // How long a real finger holds a button/key before releasing (ms)
 export const DEFAULT_HOLD = {
@@ -20,8 +23,9 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randBetween = ([min, max]) => min + Math.random() * (max - min);
 
 export class Engine {
-  constructor({ driver, strategy, picker, resolver, hold = DEFAULT_HOLD }) {
+  constructor({ driver, strategy, picker, resolver, matcher = null, hold = DEFAULT_HOLD }) {
     this.driver   = driver;
+    this.matcher  = matcher;
     this.mover    = new MouseMover(driver, strategy);
     this.picker   = picker;
     this.resolver = resolver;
@@ -82,6 +86,21 @@ export class Engine {
     }
   }
 
+  /** Remember how a screen area looks right now (for "Check area" targets) */
+  snapshot(rect) {
+    return this.#requireMatcher().snapshot(rect);
+  }
+
+  /** How much a "Check area" target looks like its snapshot right now (0..1) */
+  matchScore(target) {
+    return this.#requireMatcher().score(target.rect, target.snapshot);
+  }
+
+  #requireMatcher() {
+    if (!this.matcher) throw new Error('This engine has no screen reader');
+    return this.matcher;
+  }
+
   /** Tap a key, holding it a human-like moment */
   async pressKey(key) {
     this.driver.keyDown(key);
@@ -98,5 +117,6 @@ export async function createEngine() {
     strategy: new BezierMovement(),
     picker:   new PointPicker(),
     resolver: new TargetResolver(),
+    matcher:  new SnapshotMatcher(new RobotJsScreen(robot)),
   });
 }

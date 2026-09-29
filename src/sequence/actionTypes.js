@@ -34,6 +34,34 @@ export const ACTION_TYPES = {
     color: '#2dd4bf',
     create: ({ targetId }) => ({ id: newStepId(), type: 'walk', targetId, minMs: 2500, maxMs: 4500 }),
   },
+  // Created from a "Check area" target: wait until it looks the same / changes
+  waitUntil: {
+    label: 'Wait until',
+    icon:  '⏳',
+    color: '#e879f9',
+    create: ({ targetId }) => ({
+      id: newStepId(), type: 'waitUntil', targetId,
+      state: 'same', threshold: 0.9, timeoutMs: 10000, onTimeout: 'continue',
+    }),
+  },
+  // Look at a Check area once: if true → jump (step / next loop / stop)
+  if: {
+    label: 'If',
+    icon:  '⑂',
+    color: '#fbbf24',
+    create: ({ targets = [] } = {}) => ({
+      id: newStepId(), type: 'if',
+      targetId: targets.find(t => t.kind === 'check')?.id ?? null,
+      state: 'changed', threshold: 0.9, then: null,
+    }),
+  },
+  // Always jump — with If, makes "repeat until" loops
+  goto: {
+    label: 'Go to',
+    icon:  '↩',
+    color: '#fbbf24',
+    create: () => ({ id: newStepId(), type: 'goto', then: null }),
+  },
   wait: {
     label: 'Pause',
     icon:  '◷',
