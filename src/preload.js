@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testMoveToTarget:  (target) => ipcRenderer.invoke('target-test-move', { target }),
   snapshotArea:      (rect)   => ipcRenderer.invoke('target-snapshot', { rect }),
   matchTarget:       (target) => ipcRenderer.invoke('target-match', { target }),
+  findColor:         (target) => ipcRenderer.invoke('color-find', { target }),
   getOverlayData:    ()       => ipcRenderer.invoke('overlay-get-data'),
   sendOverlayResult: (rect)   => ipcRenderer.send('overlay-result', rect),
 

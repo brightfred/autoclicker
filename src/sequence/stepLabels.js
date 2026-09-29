@@ -14,6 +14,7 @@ export function stepLabel(step, targetById) {
     case 'walk':      return `Walk to ${target ?? '?'}`;
     case 'waitUntil': return `Wait until ${target ?? '?'}`;
     case 'if':        return `If ${target ?? '?'}`;
+    case 'clickColor': return `Click nearest ${target ?? '?'}`;
     case 'key':       return `Press ${keyLabel(step.key)}`;
     default:          return type;
   }

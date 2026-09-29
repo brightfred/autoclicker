@@ -13,6 +13,7 @@ import { WalkAction } from './actions/WalkAction.js';
 import { WaitUntilAction } from './actions/WaitUntilAction.js';
 import { IfAction } from './actions/IfAction.js';
 import { GoToAction } from './actions/GoToAction.js';
+import { ClickColorAction } from './actions/ClickColorAction.js';
 
 export class ActionRegistry {
   #types = new Map();
@@ -39,5 +40,6 @@ export function createDefaultRegistry() {
     .register('walk', WalkAction)
     .register('waitUntil', WaitUntilAction)
     .register('if', IfAction)
-    .register('goto', GoToAction);
+    .register('goto', GoToAction)
+    .register('clickColor', ClickColorAction);
 }

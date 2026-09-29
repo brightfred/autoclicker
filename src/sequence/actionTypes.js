@@ -44,6 +44,22 @@ export const ACTION_TYPES = {
       state: 'same', threshold: 0.9, timeoutMs: 10000, onTimeout: 'continue',
     }),
   },
+  // Created from a "Color finder" target: click the nearest highlighted thing,
+  // then (optionally) wait until its highlight is gone
+  clickColor: {
+    label: 'Click color',
+    icon:  '🎯',
+    color: '#ff5cf0',
+    create: ({ targetId, targets = [] } = {}) => ({
+      id: newStepId(), type: 'clickColor', targetId,
+      pick: 'nearest', button: 'left',
+      appearTimeoutMs: 15000, onNone: 'continue',
+      waitGone: true, goneTimeoutMs: 120000,
+      // "…or until the inventory is full" if I have that check area
+      alsoCheckId: targets.find(t => t.kind === 'check' && /slot 28|full/i.test(t.name))?.id ?? null,
+      alsoState: 'changed', alsoThreshold: 0.9,
+    }),
+  },
   // Look at a Check area once: if true → jump (step / next loop / stop)
   if: {
     label: 'If',

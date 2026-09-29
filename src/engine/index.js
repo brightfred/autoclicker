@@ -12,6 +12,7 @@ import { PointPicker } from './targeting/PointPicker.js';
 import { TargetResolver } from './targeting/TargetResolver.js';
 import { RobotJsScreen } from './vision/RobotJsScreen.js';
 import { SnapshotMatcher } from './vision/SnapshotMatcher.js';
+import { ColorFinder } from './vision/ColorFinder.js';
 
 // How long a real finger holds a button/key before releasing (ms)
 export const DEFAULT_HOLD = {
@@ -23,9 +24,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randBetween = ([min, max]) => min + Math.random() * (max - min);
 
 export class Engine {
-  constructor({ driver, strategy, picker, resolver, matcher = null, hold = DEFAULT_HOLD }) {
+  constructor({ driver, strategy, picker, resolver, matcher = null, finder = null, hold = DEFAULT_HOLD }) {
     this.driver   = driver;
     this.matcher  = matcher;
+    this.finder   = finder;
     this.mover    = new MouseMover(driver, strategy);
     this.picker   = picker;
     this.resolver = resolver;
@@ -96,6 +98,37 @@ export class Engine {
     return this.#requireMatcher().score(target.rect, target.snapshot);
   }
 
+  /** Highlighted blobs inside a "Color finder" target's area */
+  findColor(target) {
+    return this.#requireFinder().find(target.rect, target.color, target.tolerance);
+  }
+
+  /** How much of a color finder's color is inside some area (to see it disappear) */
+  countColor(rect, target) {
+    return this.#requireFinder().count(rect, target.color, target.tolerance);
+  }
+
+  /**
+   * Click inside a found blob: near its center, human-like random spot.
+   * The box is shrunk to its middle so I land inside the outline, not on it.
+   */
+  async clickBlob(blob, { button = 'left', shouldStop, key } = {}) {
+    const inner = {
+      x: blob.cx - blob.w * 0.2, y: blob.cy - blob.h * 0.2,
+      w: blob.w * 0.4, h: blob.h * 0.4,
+    };
+    const point = this.picker.pick(inner, key);
+    const reached = await this.mover.moveTo(point, { targetSize: Math.min(blob.w, blob.h), shouldStop });
+    if (!reached) return null;
+    await this.click(button);
+    return point;
+  }
+
+  #requireFinder() {
+    if (!this.finder) throw new Error('This engine has no color finder');
+    return this.finder;
+  }
+
   #requireMatcher() {
     if (!this.matcher) throw new Error('This engine has no screen reader');
     return this.matcher;
@@ -111,12 +144,14 @@ export class Engine {
 
 /** Build the engine with the real robotjs mouse/keyboard */
 export async function createEngine() {
-  const robot = (await import('@jitsi/robotjs')).default;
+  const robot  = (await import('@jitsi/robotjs')).default;
+  const screen = new RobotJsScreen(robot);
   return new Engine({
     driver:   new RobotJsDriver(robot),
     strategy: new BezierMovement(),
     picker:   new PointPicker(),
     resolver: new TargetResolver(),
-    matcher:  new SnapshotMatcher(new RobotJsScreen(robot)),
+    matcher:  new SnapshotMatcher(screen),
+    finder:   new ColorFinder(screen),
   });
 }
