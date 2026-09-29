@@ -7,12 +7,24 @@ import { INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 
 const SLOT_COUNT = INV_COLS * INV_ROWS;
 
+// Where If / Go to can jump besides a step (same values as the engine's flow.js)
+const SPECIAL_JUMPS = ['@next-loop', '@stop'];
+
+function jumpIssue(step, stepIds) {
+  if (!step.then) return 'choose where to go';
+  if (SPECIAL_JUMPS.includes(step.then)) return null;
+  if (step.then === step.id) return "can't go to itself";
+  if (stepIds && !stepIds.has(step.then)) return 'the step it goes to was removed';
+  return null;
+}
+
 /**
  * @param {object} step
  * @param {Map<string, object>} targetById - targets of the sequence's setup
+ * @param {Set<string>} [stepIds]          - ids of all steps (for If / Go to)
  * @returns {string|null} short problem text, or null if the step is fine
  */
-export function stepIssue(step, targetById) {
+export function stepIssue(step, targetById, stepIds) {
   switch (step.type) {
     case 'click': {
       if (!step.targetId) return 'choose a target';
@@ -27,6 +39,15 @@ export function stepIssue(step, targetById) {
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
     case 'wait':
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
+    case 'if': {
+      if (!step.targetId) return 'choose which area to check';
+      const t = targetById.get(step.targetId);
+      if (!t) return 'area was deleted or is in another setup';
+      if (!t.snapshot) return 'this area has no snapshot yet — take one in Targets';
+      return jumpIssue(step, stepIds);
+    }
+    case 'goto':
+      return jumpIssue(step, stepIds);
     case 'waitUntil': {
       if (!step.targetId) return 'choose which area to watch';
       const t = targetById.get(step.targetId);
@@ -50,8 +71,9 @@ export function stepIssue(step, targetById) {
  */
 export function sequenceIssues(sequence, targetById) {
   if (!sequence.actions.length) return [{ index: null, text: 'no steps yet' }];
+  const stepIds = new Set(sequence.actions.map(a => a.id));
   return sequence.actions
-    .map((step, index) => ({ index, text: stepIssue(step, targetById) }))
+    .map((step, index) => ({ index, text: stepIssue(step, targetById, stepIds) }))
     .filter(issue => issue.text);
 }
 
@@ -63,6 +85,8 @@ export function stepDurationMs(step) {
     case 'camera':     return 4000;
     case 'waitUntil':  return Math.min(step.timeoutMs, 2000); // usually done well before the timeout
     case 'breakpoint': return 0; // breaks are counted by the efficiency slider
+    case 'if':
+    case 'goto':       return 0; // just a quick look / a jump
     default:           return 700;
   }
 }

@@ -9,6 +9,9 @@
 // Any step can be marked firstLoopOnly (e.g. withdraw a tinderbox once)
 // or skipFirstLoop (e.g. deposit the wine I made in the previous loop).
 //
+// An action can return a flow signal (see flow.js) to jump: If / Go to steps
+// send me to another step, to the next loop, or end the run.
+//
 // Status updates go out through onStatus() so the UI can highlight the
 // current step — the runner itself knows nothing about windows or IPC.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +55,7 @@ export class SequenceRunner {
    * @returns {string[]} problems, each prefixed with its step number
    */
   validate(sequence, targets) {
-    const ctx = this.#context(targets);
+    const ctx = this.#context(targets, { stepIds: new Set(sequence.actions.map(a => a.id)) });
     const problems = [];
     if (sequence.actions.length === 0) problems.push('The sequence has no steps');
 
@@ -94,26 +97,39 @@ export class SequenceRunner {
     this.#breaks = 0;
     clock.start();
 
+    // Step id → position, for If / Go to jumps
+    const indexOf = new Map(sequence.actions.map((def, i) => [def.id, i]));
+    let endedBy = null; // set when an If / Go to step ends the run
+
     try {
-      for (let loop = 1; loop <= loops && !ctx.shouldStop(); loop++) {
-        for (let step = 0; step < actions.length && !ctx.shouldStop(); step++) {
+      for (let loop = 1; loop <= loops && !ctx.shouldStop() && !endedBy; loop++) {
+        let step = 0;
+        while (step < actions.length && !ctx.shouldStop()) {
           // Some steps only belong to the first loop (withdraw a tinderbox),
           // others only to the loops after it (deposit what I just made)
           const def = sequence.actions[step];
-          if (def.firstLoopOnly && loop > 1) continue;
-          if (def.skipFirstLoop && loop === 1) continue;
+          if ((def.firstLoopOnly && loop > 1) || (def.skipFirstLoop && loop === 1)) {
+            step++;
+            continue;
+          }
 
-          this.#position = { loop, loops: sequence.loops, step, stepId: sequence.actions[step].id };
+          this.#position = { loop, loops: sequence.loops, step, stepId: def.id };
           this.#emit(clock);
-          await actions[step].execute(ctx);
+          const signal = await actions[step].execute(ctx);
 
           // Natural reaction pause, a bit slower when I'm "tired"
           const pace = breakPolicy.paceMultiplier(clock.snapshot(breakPolicy.kinds));
           await ctx.sleep(this.#between(this.reactionMs) * pace);
+
+          // Where to next: a jump from If / Go to, or simply the next step
+          if (signal?.goTo) step = indexOf.get(signal.goTo);
+          else if (signal?.nextLoop) break;
+          else if (signal?.stopRun) { endedBy = signal.reason ?? 'a step'; break; }
+          else step++;
         }
-        if (!hasBreakPoints && !ctx.shouldStop()) await ctx.breakPoint();
+        if (!endedBy && !hasBreakPoints && !ctx.shouldStop()) await ctx.breakPoint();
       }
-      this.onStatus({ running: false, done: true, stopped: this.#stopRequested, ...this.#stats(clock) });
+      this.onStatus({ running: false, done: true, stopped: this.#stopRequested, endedBy, ...this.#stats(clock) });
     } catch (err) {
       console.error('[SEQUENCE] Error:', err);
       this.onStatus({ running: false, done: true, error: err.message, ...this.#stats(clock) });
@@ -124,8 +140,9 @@ export class SequenceRunner {
 
   // ── Internals ──────────────────────────────────────────────────────────────
 
-  #context(targets, { clock, breakPolicy } = {}) {
+  #context(targets, { clock, breakPolicy, stepIds = new Set() } = {}) {
     return {
+      stepIds,
       engine:     this.engine,
       targets:    new Map(targets.map(t => [t.id, t])),
       shouldStop: () => this.#stopRequested,

@@ -30,6 +30,25 @@
         </div>
       </section>
 
+      <!-- Logic: If / Go to (for "repeat until" loops) -->
+      <section v-if="logic.length" class="group">
+        <div class="group-title">Logic</div>
+        <div
+          v-for="a in logic" :key="a.type"
+          class="card" :class="{ locked: busy }" :style="{ '--c': ACTION_TYPES[a.type].color }"
+          :draggable="!busy"
+          @dragstart="$emit('drag-start', $event, () => ACTION_TYPES[a.type].create({ targets }))"
+          @dragend="$emit('drag-end')"
+          @click="!busy && $emit('add', ACTION_TYPES[a.type].create({ targets }))"
+        >
+          <span class="card-icon">{{ ACTION_TYPES[a.type].icon }}</span>
+          <span class="card-text">
+            <span class="card-name">{{ ACTION_TYPES[a.type].label }}</span>
+            <span class="card-sub">{{ a.sub }}</span>
+          </span>
+        </div>
+      </section>
+
       <!-- Walk to a minimap spot / tile -->
       <section class="group">
         <div class="group-title">Walk to</div>
@@ -120,10 +139,17 @@ const BUILT_INS = [
   { type: 'camera',     sub: 'North · top tilt · max zoom' },
 ];
 
+// If / Go to — jumps between steps
+const LOGIC = [
+  { type: 'if',   sub: 'Check an area → jump if true' },
+  { type: 'goto', sub: 'Jump to a step (repeat until…)' },
+];
+
 const search = ref('');
 const matches = (text) => text.toLowerCase().includes(search.value.trim().toLowerCase());
 
 const builtIns     = computed(() => BUILT_INS.filter(a => matches(ACTION_TYPES[a.type].label)));
+const logic        = computed(() => LOGIC.filter(a => matches(ACTION_TYPES[a.type].label)));
 const walkTargets  = computed(() => props.targets.filter(t => WALK_KINDS.includes(t.kind) && matches(t.name)));
 const watchTargets = computed(() => props.targets.filter(t => WATCH_KINDS.includes(t.kind) && matches(t.name)));
 // Minimap spots are only for walking and check areas only for watching;

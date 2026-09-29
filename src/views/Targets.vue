@@ -114,6 +114,12 @@
               <button class="btn-icon" @click="retakeSnapshot(t)" title="Retake snapshot — the game should show the state to wait for">📷</button>
             </template>
             <button v-else class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
+            <button
+              v-if="t.kind === 'inventory'"
+              class="btn-icon"
+              title="Make an 'inventory full' check — slot 28 must be EMPTY right now"
+              @click="makeFullCheck(t)"
+            >👁</button>
             <button class="btn-icon" @click="locate(t)" title="Show on screen">◎</button>
             <button class="btn-icon" @click="redraw(t)" title="Redraw box">⬚</button>
             <button class="btn-icon" @click="openPrompt('rename-target', t)" title="Rename">✎</button>
@@ -165,7 +171,7 @@ import { useTargetsStore } from '../stores/targets';
 import ModalBackdrop from '../components/ModalBackdrop.vue';
 import SnapshotThumb from '../components/SnapshotThumb.vue';
 import { useSequencesStore } from '../stores/sequences';
-import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
+import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS, inventorySlots } from '../utils/targetGeometry.js';
 
 const store    = useTargetsStore();
 const seqStore = useSequencesStore();
@@ -280,6 +286,17 @@ async function retakeSnapshot(target) {
 async function testMatch(target) {
   const score = await window.electronAPI.matchTarget(JSON.parse(JSON.stringify(target)));
   matchResult.value = { ...matchResult.value, [target.id]: Math.round(score * 100) };
+}
+
+// One click "inventory full" check: a Check area on slot 28, snapped while it's
+// empty. Later, "has changed" = something is in slot 28 = inventory full.
+async function makeFullCheck(inventory) {
+  const slot = inventorySlots(inventory.rect)[INV_COLS * INV_ROWS - 1];
+  const rect = { x: slot.x, y: slot.y, w: slot.w, h: slot.h };
+  const snapshot = await window.electronAPI.snapshotArea(rect);
+  const name = `${inventory.name}: slot 28 empty`;
+  store.addTarget({ name, kind: 'check', rect, snapshot });
+  showToast(`"${name}" added — use "has changed" to mean inventory full`);
 }
 
 // Glide the real mouse onto the target with the natural movement engine (no click)

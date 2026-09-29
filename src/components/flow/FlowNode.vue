@@ -85,6 +85,34 @@
           </span>
         </template>
 
+        <!-- If: look once → jump when true, else carry on -->
+        <template v-else-if="step.type === 'if'">
+          <TargetSelect v-model="step.targetId" :targets="watchTargets" placeholder="choose an area to check" :disabled="busy" />
+          <select v-model="step.state" class="select sm" :disabled="busy">
+            <option value="same">looks the same</option>
+            <option value="changed">has changed</option>
+          </select>
+          <span class="grp">
+            <span class="word">≥</span>
+            <input
+              type="number" min="50" max="100" step="1" class="input num sm pct"
+              :value="Math.round(step.threshold * 100)" :disabled="busy"
+              @change="step.threshold = Math.min(1, Math.max(0.5, Number($event.target.value) / 100))"
+            />
+            <span class="word">%</span>
+          </span>
+          <span class="grp">
+            <span class="word">→ then go to</span>
+            <JumpSelect v-model="step.then" :steps="allSteps" :self-id="step.id" :target-by-id="targetById" :disabled="busy" />
+          </span>
+          <span class="note">otherwise carry on</span>
+        </template>
+
+        <!-- Go to: always jump -->
+        <template v-else-if="step.type === 'goto'">
+          <JumpSelect v-model="step.then" :steps="allSteps" :self-id="step.id" :target-by-id="targetById" :disabled="busy" />
+        </template>
+
         <!-- Pause -->
         <template v-else-if="step.type === 'wait'">
           <span class="word">for</span>
@@ -136,6 +164,7 @@
 import { computed } from 'vue';
 import TargetSelect from './TargetSelect.vue';
 import TimeRange from './TimeRange.vue';
+import JumpSelect from './JumpSelect.vue';
 import { ACTION_TYPES, KEY_OPTIONS } from '../../sequence/actionTypes.js';
 import { LOOP_MODES, loopMode, cycleLoopMode } from '../../sequence/loopModes.js';
 import { stepIssue } from '../../sequence/stepIssues.js';
@@ -153,13 +182,15 @@ const props = defineProps({
   active:     { type: Boolean, default: false },
   skipped:    { type: Boolean, default: false },
   efficiency: { type: Number, default: 1 },
+  allSteps:   { type: Array, default: () => [] }, // for If / Go to destinations
 });
 defineEmits(['remove', 'duplicate', 'grab', 'release']);
 
 const type   = computed(() => ACTION_TYPES[props.step.type] ?? { label: props.step.type, icon: '?', color: '#64748b' });
 const target = computed(() => props.targetById.get(props.step.targetId));
 const mode   = computed(() => loopMode(props.step));
-const issue  = computed(() => stepIssue(props.step, props.targetById));
+const stepIds = computed(() => new Set(props.allSteps.map(s => s.id)));
+const issue  = computed(() => stepIssue(props.step, props.targetById, stepIds.value));
 const watchTargets = computed(() => props.targets.filter(t => WATCH_KINDS.includes(t.kind)));
 
 // Switching a click to/from an inventory target needs a slot (or not)
