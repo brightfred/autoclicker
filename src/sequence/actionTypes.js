@@ -34,6 +34,16 @@ export const ACTION_TYPES = {
     color: '#2dd4bf',
     create: ({ targetId }) => ({ id: newStepId(), type: 'walk', targetId, minMs: 2500, maxMs: 4500 }),
   },
+  // Created from a "Check area" target: wait until it looks the same / changes
+  waitUntil: {
+    label: 'Wait until',
+    icon:  '⏳',
+    color: '#e879f9',
+    create: ({ targetId }) => ({
+      id: newStepId(), type: 'waitUntil', targetId,
+      state: 'same', threshold: 0.9, timeoutMs: 10000, onTimeout: 'continue',
+    }),
+  },
   wait: {
     label: 'Pause',
     icon:  '◷',

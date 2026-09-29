@@ -27,6 +27,13 @@ export function stepIssue(step, targetById) {
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
     case 'wait':
       return step.minMs > step.maxMs ? 'min is bigger than max' : null;
+    case 'waitUntil': {
+      if (!step.targetId) return 'choose which area to watch';
+      const t = targetById.get(step.targetId);
+      if (!t) return 'area was deleted or is in another setup';
+      if (!t.snapshot) return 'this area has no snapshot yet — take one in Targets';
+      return step.timeoutMs > 0 ? null : 'timeout must be more than 0';
+    }
     case 'camera':
       if (!step.faceNorth && !step.pitchUp && !step.zoomOut) return 'turn on North, Tilt or Zoom';
       if (step.faceNorth && !targetById.get(step.compassTargetId)) return 'North: choose which target is your compass';
@@ -54,6 +61,7 @@ export function stepDurationMs(step) {
     case 'wait':       return (step.minMs + step.maxMs) / 2;
     case 'walk':       return 700 + (step.minMs + step.maxMs) / 2;
     case 'camera':     return 4000;
+    case 'waitUntil':  return Math.min(step.timeoutMs, 2000); // usually done well before the timeout
     case 'breakpoint': return 0; // breaks are counted by the efficiency slider
     default:           return 700;
   }

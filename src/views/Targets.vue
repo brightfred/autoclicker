@@ -99,11 +99,21 @@
               <span class="stat">x {{ t.rect.x }} · y {{ t.rect.y }}</span>
               <span class="stat">{{ t.rect.w }} × {{ t.rect.h }} px</span>
               <span v-if="t.kind === 'inventory'" class="stat accent">28 slots · {{ slotSize(t.rect) }}</span>
+              <template v-if="t.kind === 'check'">
+                <span v-if="!t.snapshot" class="stat warn">no snapshot yet</span>
+                <span v-else-if="matchResult[t.id] != null" class="stat accent">looks {{ matchResult[t.id] }}% the same right now</span>
+              </template>
             </div>
           </div>
 
+          <SnapshotThumb v-if="t.kind === 'check' && t.snapshot" :snapshot="t.snapshot" />
+
           <div class="card-actions">
-            <button class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
+            <template v-if="t.kind === 'check'">
+              <button class="btn-icon" @click="testMatch(t)" :disabled="!t.snapshot" title="Test — how much does it look like the snapshot right now?">%</button>
+              <button class="btn-icon" @click="retakeSnapshot(t)" title="Retake snapshot — the game should show the state to wait for">📷</button>
+            </template>
+            <button v-else class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
             <button class="btn-icon" @click="locate(t)" title="Show on screen">◎</button>
             <button class="btn-icon" @click="redraw(t)" title="Redraw box">⬚</button>
             <button class="btn-icon" @click="openPrompt('rename-target', t)" title="Rename">✎</button>
@@ -153,6 +163,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useTargetsStore } from '../stores/targets';
 import ModalBackdrop from '../components/ModalBackdrop.vue';
+import SnapshotThumb from '../components/SnapshotThumb.vue';
 import { useSequencesStore } from '../stores/sequences';
 import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS } from '../utils/targetGeometry.js';
 
@@ -180,6 +191,7 @@ const toast       = ref(null);
 let toastTimer    = null;
 
 const PLACEHOLDERS = {
+  check:     'Bank is open',
   zone:      'GE Banker',
   tile:      'Fire tile',
   item:      'Bank: Logs',
@@ -220,9 +232,11 @@ async function drawNew() {
       targets: otherTargets(),
     });
     if (rect) {
-      store.addTarget({ name, kind: newKind.value, rect });
+      // A check area also remembers how it looks right now
+      const snapshot = newKind.value === 'check' ? await window.electronAPI.snapshotArea(rect) : undefined;
+      store.addTarget({ name, kind: newKind.value, rect, ...(snapshot && { snapshot }) });
       newName.value = '';
-      showToast(`"${name}" saved`);
+      showToast(snapshot ? `"${name}" saved with a snapshot of how it looks now` : `"${name}" saved`);
     }
   } finally {
     busy.value = false;
@@ -239,12 +253,33 @@ async function redraw(target) {
       targets: otherTargets(target.id),
     });
     if (rect) {
-      store.updateTarget(target.id, { rect });
+      // New box = new snapshot, or the old picture wouldn't match the new area
+      const snapshot = target.kind === 'check' ? await window.electronAPI.snapshotArea(rect) : undefined;
+      store.updateTarget(target.id, { rect, ...(snapshot && { snapshot }) });
       showToast(`"${target.name}" updated`);
     }
   } finally {
     busy.value = false;
   }
+}
+
+// ── Check areas ────────────────────────────────────────────────────────────
+// Snapshot = how the area should look (e.g. with the bank open). I retake it
+// whenever the game is showing the state I want to wait for.
+
+const matchResult = ref({}); // target id → last tested match % (shown on the card)
+
+async function retakeSnapshot(target) {
+  const snapshot = await window.electronAPI.snapshotArea(JSON.parse(JSON.stringify(target.rect)));
+  store.updateTarget(target.id, { snapshot });
+  matchResult.value = { ...matchResult.value, [target.id]: null };
+  showToast(`New snapshot of "${target.name}"`);
+}
+
+// Compare the area right now with its snapshot
+async function testMatch(target) {
+  const score = await window.electronAPI.matchTarget(JSON.parse(JSON.stringify(target)));
+  matchResult.value = { ...matchResult.value, [target.id]: Math.round(score * 100) };
 }
 
 // Glide the real mouse onto the target with the natural movement engine (no click)
@@ -364,7 +399,7 @@ onMounted(async () => {
 
 .kind-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .kind-card {
@@ -426,6 +461,7 @@ onMounted(async () => {
 .card-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat.warn { color: var(--color-red); border-color: rgba(239, 68, 68, 0.4); }
 .stat.accent { color: var(--kind); border-color: color-mix(in srgb, var(--kind) 40%, transparent); }
 
 .card-actions { display: flex; gap: 6px; }

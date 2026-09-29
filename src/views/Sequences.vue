@@ -173,6 +173,10 @@ function preview(seq) {
       const t = targets.find(t => t.id === step.targetId);
       return `➜ ${t ? t.name : '?'}`;
     }
+    if (step.type === 'waitUntil') {
+      const t = targets.find(t => t.id === step.targetId);
+      return `⏳ ${t ? t.name : '?'}`;
+    }
     if (step.type === 'key') return keyLabel(step.key);
     if (step.type === 'breakpoint') return '☕';
     if (step.type === 'camera') return '🧭';

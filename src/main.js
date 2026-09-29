@@ -114,6 +114,53 @@ ipcMain.handle('target-test-move', async (_, { target }) => {
   return eng.moveToTarget(target);
 });
 
+// Take a snapshot of a "Check area" target. My window is hidden for a moment
+// so it can't cover the area, then comes back.
+// Windows fades windows out (and the overlay was just on screen), and the game
+// itself animates — so I only keep a snapshot once the area has stopped
+// changing: two looks in a row that match.
+const SNAPSHOT_SETTLE_MS = 300;  // first wait after hiding my window
+const SNAPSHOT_RECHECK_MS = 150; // gap between the two looks
+const SNAPSHOT_MAX_MS = 2500;    // give up waiting for "stable" after this
+const SNAPSHOT_STABLE = 0.98;    // two looks this similar = stable
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Look at the screen with my own window out of the way (it could be covering
+// the game), then bring it back
+async function withWindowHidden(look) {
+  const wasVisible = mainWindow?.isVisible();
+  if (wasVisible) mainWindow.hide();
+  try {
+    await wait(SNAPSHOT_SETTLE_MS);
+    return await look();
+  } finally {
+    if (wasVisible) mainWindow.showInactive();
+  }
+}
+
+ipcMain.handle('target-snapshot', async (_, { rect }) => {
+  const eng = await getEngine();
+  return withWindowHidden(async () => {
+    const giveUpAt = Date.now() + SNAPSHOT_MAX_MS;
+    let snap = eng.snapshot(rect);
+    while (Date.now() < giveUpAt) {
+      await wait(SNAPSHOT_RECHECK_MS);
+      const stable = eng.matchScore({ rect, snapshot: snap }) >= SNAPSHOT_STABLE;
+      if (stable) return snap;
+      snap = eng.snapshot(rect);
+    }
+    return snap; // still moving after 2.5s (animated area) — keep the latest look
+  });
+});
+
+// How much a "Check area" looks like its snapshot right now (0..1) —
+// measured with my window hidden, so it sees the game and not the app
+ipcMain.handle('target-match', async (_, { target }) => {
+  const eng = await getEngine();
+  return withWindowHidden(() => eng.matchScore(target));
+});
+
 // ── Sequences ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('sequences-load',   ()        => sequencesFile.load());
