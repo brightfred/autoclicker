@@ -48,6 +48,18 @@ export function stepIssue(step, targetById, stepIds) {
     }
     case 'goto':
       return jumpIssue(step, stepIds);
+    case 'clickColor': {
+      if (!step.targetId) return 'choose a color finder';
+      const t = targetById.get(step.targetId);
+      if (!t) return 'target was deleted or is in another setup';
+      if (t.kind !== 'color') return 'that target is not a color finder';
+      if (step.waitGone && step.alsoCheckId) {
+        const c = targetById.get(step.alsoCheckId);
+        if (!c) return 'the extra check area was deleted';
+        if (!c.snapshot) return 'the extra check area has no snapshot yet';
+      }
+      return null;
+    }
     case 'waitUntil': {
       if (!step.targetId) return 'choose which area to watch';
       const t = targetById.get(step.targetId);
@@ -87,6 +99,7 @@ export function stepDurationMs(step) {
     case 'breakpoint': return 0; // breaks are counted by the efficiency slider
     case 'if':
     case 'goto':       return 0; // just a quick look / a jump
+    case 'clickColor': return step.waitGone ? 30000 : 900; // a tree usually lasts a while
     default:           return 700;
   }
 }

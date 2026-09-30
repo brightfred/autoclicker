@@ -58,6 +58,17 @@
           maxlength="40"
           @keydown.enter="drawNew"
         />
+        <!-- Color finder: which highlight color to look for -->
+        <template v-if="newKind === 'color'">
+          <label class="color-field" title="The highlight color set in RuneLite (Object Markers)">
+            <input v-model="newColor" type="color" class="color-input" />
+            <span class="stat">{{ newColor }}</span>
+          </label>
+          <label class="color-field" title="How far a pixel's color may be from it and still count (0–255)">
+            <span class="field-label">±</span>
+            <input v-model.number="newTolerance" type="number" min="5" max="120" class="input num" />
+          </label>
+        </template>
         <button class="btn-primary" :disabled="busy" @click="drawNew">
           ⬚ Draw on screen
         </button>
@@ -103,17 +114,27 @@
                 <span v-if="!t.snapshot" class="stat warn">no snapshot yet</span>
                 <span v-else-if="matchResult[t.id] != null" class="stat accent">looks {{ matchResult[t.id] }}% the same right now</span>
               </template>
+              <template v-if="t.kind === 'color'">
+                <label class="color-field" title="Highlight color to look for">
+                  <input type="color" class="color-input sm" :value="t.color" @change="store.updateTarget(t.id, { color: $event.target.value })" />
+                  <span class="stat">{{ t.color }} ± {{ t.tolerance }}</span>
+                </label>
+                <span v-if="findResult[t.id] != null" class="stat accent">
+                  {{ findResult[t.id] === 0 ? 'nothing highlighted right now' : `found ${findResult[t.id]} right now` }}
+                </span>
+              </template>
             </div>
           </div>
 
           <SnapshotThumb v-if="t.kind === 'check' && t.snapshot" :snapshot="t.snapshot" />
 
           <div class="card-actions">
+            <button v-if="t.kind === 'color'" class="btn-icon" title="Find now — shows what it sees on screen" @click="findNow(t)">🔍</button>
             <template v-if="t.kind === 'check'">
               <button class="btn-icon" @click="testMatch(t)" :disabled="!t.snapshot" title="Test — how much does it look like the snapshot right now?">%</button>
               <button class="btn-icon" @click="retakeSnapshot(t)" title="Retake snapshot — the game should show the state to wait for">📷</button>
             </template>
-            <button v-else class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
+            <button v-else-if="t.kind !== 'color'" class="btn-icon" @click="testMove(t)" title="Test move — glide the mouse onto it (no click)">➚</button>
             <button
               v-if="t.kind === 'inventory'"
               class="btn-icon"
@@ -171,7 +192,10 @@ import { useTargetsStore } from '../stores/targets';
 import ModalBackdrop from '../components/ModalBackdrop.vue';
 import SnapshotThumb from '../components/SnapshotThumb.vue';
 import { useSequencesStore } from '../stores/sequences';
-import { TARGET_KINDS, getKind, INV_COLS, INV_ROWS, inventorySlots } from '../utils/targetGeometry.js';
+import {
+  TARGET_KINDS, getKind, INV_COLS, INV_ROWS, inventorySlots,
+  DEFAULT_FINDER_COLOR, DEFAULT_FINDER_TOLERANCE,
+} from '../utils/targetGeometry.js';
 
 const store    = useTargetsStore();
 const seqStore = useSequencesStore();
@@ -189,6 +213,8 @@ const { setups, activeSetup, targets } = storeToRefs(store);
 
 const newKind     = ref('zone');
 const newName     = ref('');
+const newColor     = ref(DEFAULT_FINDER_COLOR);      // Color finder only
+const newTolerance = ref(DEFAULT_FINDER_TOLERANCE);  // Color finder only
 const busy        = ref(false);   // true while the overlay is open
 const prompt      = ref(null);    // { mode, title, value, item }
 const promptInput = ref(null);
@@ -198,6 +224,7 @@ let toastTimer    = null;
 
 const PLACEHOLDERS = {
   check:     'Bank is open',
+  color:     'Magic trees',
   zone:      'GE Banker',
   tile:      'Fire tile',
   item:      'Bank: Logs',
@@ -240,7 +267,8 @@ async function drawNew() {
     if (rect) {
       // A check area also remembers how it looks right now
       const snapshot = newKind.value === 'check' ? await window.electronAPI.snapshotArea(rect) : undefined;
-      store.addTarget({ name, kind: newKind.value, rect, ...(snapshot && { snapshot }) });
+      const finder = newKind.value === 'color' ? { color: newColor.value, tolerance: newTolerance.value } : {};
+      store.addTarget({ name, kind: newKind.value, rect, snapshot, ...finder });
       newName.value = '';
       showToast(snapshot ? `"${name}" saved with a snapshot of how it looks now` : `"${name}" saved`);
     }
@@ -286,6 +314,23 @@ async function retakeSnapshot(target) {
 async function testMatch(target) {
   const score = await window.electronAPI.matchTarget(JSON.parse(JSON.stringify(target)));
   matchResult.value = { ...matchResult.value, [target.id]: Math.round(score * 100) };
+}
+
+// ── Color finders ──────────────────────────────────────────────────────────
+
+const findResult = ref({}); // target id → how many highlighted things were found
+
+// Look now, then draw every found thing on screen so I can check it sees right
+async function findNow(target) {
+  const blobs = await window.electronAPI.findColor(JSON.parse(JSON.stringify(target)));
+  findResult.value = { ...findResult.value, [target.id]: blobs.length };
+  if (!blobs.length) return;
+  window.electronAPI.showOnScreen({
+    targets: blobs.map((b, i) => ({
+      id: `found-${i}`, kind: 'color', name: i === 0 ? `#${i + 1} (biggest)` : `#${i + 1}`,
+      rect: { x: b.x, y: b.y, w: b.w, h: b.h },
+    })),
+  });
 }
 
 // One click "inventory full" check: a Check area on slot 28, snapped while it's
@@ -416,7 +461,7 @@ onMounted(async () => {
 
 .kind-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 .kind-card {
@@ -478,6 +523,10 @@ onMounted(async () => {
 .card-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-field { display: inline-flex; align-items: center; gap: 6px; }
+.color-input { width: 38px; height: 34px; padding: 0; border: 1px solid var(--color-border); background: var(--color-panel); cursor: pointer; }
+.color-input.sm { width: 22px; height: 20px; }
+.add-row .input.num { width: 64px; flex: none; }
 .stat.warn { color: var(--color-red); border-color: rgba(239, 68, 68, 0.4); }
 .stat.accent { color: var(--kind); border-color: color-mix(in srgb, var(--kind) 40%, transparent); }
 

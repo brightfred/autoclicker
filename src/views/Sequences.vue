@@ -177,6 +177,10 @@ function preview(seq) {
       const t = targets.find(t => t.id === step.targetId);
       return `⏳ ${t ? t.name : '?'}`;
     }
+    if (step.type === 'clickColor') {
+      const t = targets.find(t => t.id === step.targetId);
+      return `🎯 ${t ? t.name : '?'}`;
+    }
     if (step.type === 'if') return '⑂ If';
     if (step.type === 'goto') return '↩';
     if (step.type === 'key') return keyLabel(step.key);

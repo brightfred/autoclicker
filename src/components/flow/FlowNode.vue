@@ -85,6 +85,60 @@
           </span>
         </template>
 
+        <!-- Click color: nearest highlighted thing, then maybe wait until it's gone -->
+        <template v-else-if="step.type === 'clickColor'">
+          <div class="cam-row">
+            <TargetSelect v-model="step.targetId" :targets="colorTargets" placeholder="choose a color finder" :disabled="busy" />
+            <select v-model="step.pick" class="select sm" :disabled="busy">
+              <option value="nearest">nearest</option>
+              <option value="random">random</option>
+            </select>
+            <button
+              class="chip"
+              :class="{ on: step.button === 'right' }"
+              :disabled="busy"
+              @click="step.button = step.button === 'right' ? 'left' : 'right'"
+            >{{ step.button === 'right' ? 'Right' : 'Left' }}</button>
+          </div>
+          <div class="cam-row">
+            <span class="word">none highlighted? wait up to</span>
+            <input
+              type="number" min="0" step="1" class="input num sm pct"
+              :value="Math.round(step.appearTimeoutMs / 1000)" :disabled="busy"
+              @change="step.appearTimeoutMs = Math.max(0, Number($event.target.value)) * 1000"
+            />
+            <span class="word">s, then</span>
+            <select v-model="step.onNone" class="select sm" :disabled="busy">
+              <option value="continue">carry on</option>
+              <option value="stop">stop the run</option>
+            </select>
+          </div>
+          <div class="cam-row">
+            <label class="check-inline">
+              <input type="checkbox" v-model="step.waitGone" :disabled="busy" />
+              <span>then wait until it's gone</span>
+            </label>
+            <template v-if="step.waitGone">
+              <span class="word">up to</span>
+              <input
+                type="number" min="1" step="1" class="input num sm pct"
+                :value="Math.round(step.goneTimeoutMs / 1000)" :disabled="busy"
+                @change="step.goneTimeoutMs = Math.max(1, Number($event.target.value)) * 1000"
+              />
+              <span class="word">s</span>
+            </template>
+          </div>
+          <div v-if="step.waitGone" class="cam-row">
+            <span class="word">…or until</span>
+            <TargetSelect v-model="step.alsoCheckId" :targets="watchTargets" placeholder="(optional) a check area" :disabled="busy" />
+            <select v-if="step.alsoCheckId" v-model="step.alsoState" class="select sm" :disabled="busy">
+              <option value="changed">has changed</option>
+              <option value="same">looks the same</option>
+            </select>
+            <button v-if="step.alsoCheckId" class="mini" :disabled="busy" title="Remove this extra check" @click="step.alsoCheckId = null">✕</button>
+          </div>
+        </template>
+
         <!-- If: look once → jump when true, else carry on -->
         <template v-else-if="step.type === 'if'">
           <TargetSelect v-model="step.targetId" :targets="watchTargets" placeholder="choose an area to check" :disabled="busy" />
@@ -192,6 +246,7 @@ const mode   = computed(() => loopMode(props.step));
 const stepIds = computed(() => new Set(props.allSteps.map(s => s.id)));
 const issue  = computed(() => stepIssue(props.step, props.targetById, stepIds.value));
 const watchTargets = computed(() => props.targets.filter(t => WATCH_KINDS.includes(t.kind)));
+const colorTargets = computed(() => props.targets.filter(t => t.kind === 'color'));
 
 // Switching a click to/from an inventory target needs a slot (or not)
 function onTargetChange() {
@@ -262,6 +317,8 @@ function onTargetChange() {
 
 .select.sm { padding: 4px 8px; font-size: 13px; }
 .select.slot { width: 56px; }
+.check-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text); cursor: pointer; }
+.check-inline input { accent-color: var(--c); }
 .grp { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .input.num.sm.pct { width: 54px; padding: 4px 6px; font-size: 13px; }
 

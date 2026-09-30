@@ -75,11 +75,13 @@ export const useTargetsStore = defineStore('targets', () => {
 
   // ── Targets (always inside the active setup) ──────────────────────────────
 
-  // snapshot: only for "Check area" targets (how the area should look)
-  function addTarget({ name, kind, rect, snapshot }) {
+  // extra: kind-specific fields — snapshot (Check area), color + tolerance (Color finder)
+  function addTarget({ name, kind, rect, ...extra }) {
     if (!activeSetup.value) return null;
     const target = { id: newId(), name, kind, rect, createdAt: new Date().toISOString() };
-    if (snapshot) target.snapshot = snapshot;
+    for (const [key, value] of Object.entries(extra)) {
+      if (value !== undefined) target[key] = value;
+    }
     activeSetup.value.targets.push(target);
     persist();
     return target;

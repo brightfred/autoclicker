@@ -161,6 +161,12 @@ ipcMain.handle('target-match', async (_, { target }) => {
   return withWindowHidden(() => eng.matchScore(target));
 });
 
+// Find what a "Color finder" target sees right now (my window out of the way)
+ipcMain.handle('color-find', async (_, { target }) => {
+  const eng = await getEngine();
+  return withWindowHidden(() => eng.findColor(target));
+});
+
 // ── Sequences ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('sequences-load',   ()        => sequencesFile.load());

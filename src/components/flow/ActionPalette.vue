@@ -71,6 +71,28 @@
         </div>
       </section>
 
+      <!-- Find & click things highlighted in a color (RuneLite markers) -->
+      <section class="group">
+        <div class="group-title">Find &amp; click</div>
+        <p v-if="colorTargets.length === 0" class="empty-hint">
+          Draw a <strong>Color finder</strong> over the game view (for RuneLite-marked trees…) — <a href="#" @click.prevent="$emit('new-target')">+ New target</a>.
+        </p>
+        <div
+          v-for="t in colorTargets" :key="t.id"
+          class="card" :class="{ locked: busy }" :style="{ '--c': getKind(t.kind).color }"
+          :draggable="!busy"
+          @dragstart="$emit('drag-start', $event, () => ACTION_TYPES.clickColor.create({ targetId: t.id, targets }))"
+          @dragend="$emit('drag-end')"
+          @click="!busy && $emit('add', ACTION_TYPES.clickColor.create({ targetId: t.id, targets }))"
+        >
+          <span class="card-icon">{{ getKind(t.kind).icon }}</span>
+          <span class="card-text">
+            <span class="card-name">{{ t.name }}</span>
+            <span class="card-sub"><span class="swatch" :style="{ background: t.color }" /> nearest highlighted</span>
+          </span>
+        </div>
+      </section>
+
       <!-- Wait until a "Check area" looks the same / changes -->
       <section class="group">
         <div class="group-title">Wait until</div>
@@ -152,10 +174,11 @@ const builtIns     = computed(() => BUILT_INS.filter(a => matches(ACTION_TYPES[a
 const logic        = computed(() => LOGIC.filter(a => matches(ACTION_TYPES[a.type].label)));
 const walkTargets  = computed(() => props.targets.filter(t => WALK_KINDS.includes(t.kind) && matches(t.name)));
 const watchTargets = computed(() => props.targets.filter(t => WATCH_KINDS.includes(t.kind) && matches(t.name)));
-// Minimap spots are only for walking and check areas only for watching;
-// tiles can be clicked too (e.g. the campfire)
+const colorTargets = computed(() => props.targets.filter(t => t.kind === 'color' && matches(t.name)));
+// Minimap spots are only for walking, check areas only for watching, color
+// finders have their own section; tiles can be clicked too (e.g. the campfire)
 const clickTargets = computed(() => props.targets.filter(t =>
-  t.kind !== 'minimap' && !WATCH_KINDS.includes(t.kind) && matches(t.name)));
+  !['minimap', 'color'].includes(t.kind) && !WATCH_KINDS.includes(t.kind) && matches(t.name)));
 </script>
 
 <style scoped>
@@ -206,6 +229,7 @@ const clickTargets = computed(() => props.targets.filter(t =>
 .card-name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-sub  { font-size: 11px; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
 .empty-hint { font-size: 12px; color: var(--color-muted); line-height: 1.45; }
 .empty-hint a { color: var(--color-accent); }
 .palette-hint { padding: 8px 12px 10px; font-size: 11px; color: var(--color-muted); border-top: 1px solid var(--color-border); }
